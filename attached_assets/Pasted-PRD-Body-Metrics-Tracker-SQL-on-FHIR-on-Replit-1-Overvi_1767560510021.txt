@@ -1,0 +1,295 @@
+PRD — Body Metrics Tracker (SQL-on-FHIR) on Replit
+1) Overview
+
+Product name: Body Metrics (SQL-on-FHIR)
+Goal: A simple web app to input body measurements + monthly goals and visualize progress over time, using a storage model that is SQL-on-FHIR shaped so it can later be consumed by a FHIR/SQL-on-FHIR backend or exported as FHIR resources.
+
+Primary user: You (single-user MVP), with an easy path to multi-user later.
+Primary platform: Replit-hosted fullstack web app (Node API + React UI + Postgres).
+
+2) Problem statement
+
+Today you track measurements and goals in ad-hoc formats (notes/spreadsheets). You want:
+
+A repeatable way to log measurements per date
+
+A way to set monthly targets
+
+Visualizations (time series) and goal progress
+
+A data model aligned to SQL-on-FHIR so future integrations are straightforward
+
+3) Success criteria
+
+MVP success looks like:
+
+You can add a measurement session in under 60 seconds
+
+You can set goals for a month in under 2 minutes
+
+You can view a chart for any metric over a date range
+
+The app reliably computes Actual vs Target and status (on/off/no-data)
+
+Data storage is stable (metric codes, units) and exportable later
+
+KPIs
+
+Logging completion rate: ≥ 90% of attempted measurement entries save successfully
+
+Time-to-log: median ≤ 60 seconds
+
+Data integrity: 0 unit mismatches; metric codes validated server-side
+
+4) In-scope (MVP)
+4.1 Measurements
+
+Create a Measurement Session with:
+
+date (required)
+
+note (optional)
+
+metrics map { metric_code: numeric_value } (at least one)
+
+Store measurement values as SQL-on-FHIR-like:
+
+observation (one row per session)
+
+observation_component (one row per metric in the session)
+
+Validate:
+
+metric codes exist in registry
+
+numeric values are valid
+
+4.2 Goals (Monthly)
+
+Select month (YYYY-MM)
+
+Input targets for any subset of metrics
+
+Store as:
+
+goal (one per month)
+
+goal_target (one per metric target)
+
+Progress computation:
+
+For each goal metric, use latest value within that month
+
+Evaluate status using direction (increase/decrease/maintain) and tolerance
+
+4.3 Visualization
+
+Dashboard:
+
+latest snapshot
+
+ratios (e.g., shoulder/waist, chest/waist) when data exists
+
+Metric Explorer:
+
+choose metric + date range → line chart
+
+Goals page:
+
+target input + table of progress (target/actual/delta/status)
+
+5) Out of scope (for MVP)
+
+Auth / multi-user (can be added later)
+
+Mobile native app
+
+Photos, body fat estimation, plicometry parsing
+
+Notifications / reminders
+
+Full HL7/FHIR terminology mapping (LOINC/SNOMED) beyond internal metric codes
+
+Complex analytics (rolling averages, trends, PRs)
+
+6) User stories
+Measurements
+
+As a user, I can enter my measurements for a date and save them.
+
+As a user, I can see my most recent measurement snapshot quickly.
+
+As a user, I can track a metric over time in a chart.
+
+Goals
+
+As a user, I can set targets for a given month.
+
+As a user, I can see whether I’m on track for each target.
+
+Admin / Data
+
+As a user, I can rely on consistent metric codes and units.
+
+As a user, I can later export data to FHIR Observation/Goal format.
+
+7) Functional requirements
+7.1 Data model
+
+Tables (Postgres)
+
+patient(id, display_name, height_cm, created_at)
+
+metric(code, display_name, unit_ucum, kind, default_direction, default_tolerance)
+
+observation(id, patient_id, status, category, code, effective_date, issued_at, note)
+
+observation_component(id, observation_id, metric_code, value_numeric, unit_ucum, source, created_at)
+
+goal(id, patient_id, lifecycle_status, month_start, month_end, description, created_at)
+
+goal_target(id, goal_id, metric_code, target_value, unit_ucum, direction, tolerance)
+
+Constraints
+
+unique(observation_id, metric_code) prevents duplicates per session
+
+unique(patient_id, month_start) one goal record per month
+
+7.2 API
+
+GET /api/bootstrap → patient + metric registry
+
+POST /api/measurements
+
+GET /api/measurements/latest?patientId=...
+
+GET /api/metrics/:code/timeseries?patientId=...&from=...&to=...
+
+PUT /api/goals (upsert for month)
+
+GET /api/progress?patientId=...&monthStart=YYYY-MM-01
+
+Validation
+
+Server validates metric codes; rejects unknown codes
+
+Enforces numeric values; rejects empty payloads
+
+7.3 UI pages
+
+/dashboard
+
+/measurements/new
+
+/metrics
+
+/goals
+
+8) Non-functional requirements
+
+Reliability: Migration + seed runs on boot without failing on re-run (idempotent).
+
+Performance: Timeseries query returns in < 300ms for typical dataset (< 5k rows).
+
+Security (MVP): No sensitive data beyond body metrics; still avoid exposing DB creds; use Replit Secrets.
+
+Maintainability: Metric registry is the single source of truth for units/directions.
+
+Portability: Can move off Replit (same Node + Postgres stack).
+
+9) UX requirements
+
+Form inputs grouped by metric type (weight/height/circumference)
+
+Save confirmation and basic error display
+
+Charts default to a sensible time window (e.g., last 12 months)
+
+Goals: blank target means “ignore metric”
+
+10) SQL-on-FHIR alignment
+
+observation ≈ FHIR Observation
+
+observation_component ≈ Observation.component
+
+goal ≈ FHIR Goal
+
+goal_target ≈ Goal.target
+
+Metric codes are stable internal identifiers; later add mapping to LOINC/SNOMED or export with code.text.
+
+11) Milestones
+
+M1 — Project boot on Replit
+
+Repo structure (server/client)
+
+Env + DB connection, migrations + seed
+
+M2 — Measurements
+
+POST measurement session
+
+Latest snapshot endpoint
+
+UI entry form
+
+M3 — Visualization
+
+Metric dropdown
+
+Timeseries endpoint
+
+Chart rendering
+
+M4 — Monthly goals
+
+Upsert goals
+
+Progress computation
+
+Goals UI table
+
+M5 — Polish
+
+Ratio cards on dashboard
+
+Better error handling
+
+Data range filters
+
+12) Acceptance criteria checklist
+
+ App runs on Replit with npm run dev
+
+ Database tables created automatically; seed does not duplicate data
+
+ Can create a measurement with at least 1 metric
+
+ Latest snapshot displays in dashboard
+
+ Timeseries chart works for any metric with data
+
+ Can set monthly goals and see progress table
+
+ Unknown metric code is rejected by API
+
+ Units are consistent per metric
+
+13) Future extensions
+
+Auth + multi-user (patient per auth user)
+
+Multiple sessions per day (timestamp instead of date)
+
+FHIR export endpoints (/api/fhir/Observation, /api/fhir/Goal)
+
+Import from CSV/Excel
+
+Plicometry + body fat estimates
+
+Notifications and weekly summaries
+
+If you want, I can also add a “Tech Spec” appendix (routes, SQL queries, component list, and error codes) tailored to how you’ll build it inside Replit.
