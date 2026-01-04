@@ -1,0 +1,439 @@
+PRD — Body Metrics Tracker: Extensions (Post-MVP, Postgres-native)
+1) Context
+
+The MVP is complete: measurement entry, monthly goals, charts, dashboard, SQL-on-FHIR-shaped tables on Postgres.
+
+This PRD covers extensions only (v1+), keeping the same core data model philosophy: Observation + components and Goal + targets, so you can later interop with FHIR and SQL-on-FHIR engines.
+
+2) Objectives
+
+Make it multi-user and secure (without RLS) via application auth + ownership checks.
+
+Improve logging fidelity with multiple sessions per day and better provenance.
+
+Enable data portability: CSV/Excel import/export + FHIR export endpoints.
+
+Add body composition (plicometry/BF%) and richer analytics.
+
+Add engagement: reminders and summaries.
+
+Add optional integrations (smart scales/wearables) and progress photos.
+
+Success metrics
+
+Multi-user: 0 cross-user data leaks in tests (authorization enforced on every endpoint)
+
+Import: >95% of valid rows import successfully with clear error report
+
+FHIR export: exported resources accepted by at least one reference server (HAPI/Firely) in validation testing
+
+Logging: users can create a session in <60s even with multiple sessions/day support
+
+Engagement: reminders increase logging frequency week-over-week
+
+3) Non-goals
+
+Clinical diagnosis/medical recommendations
+
+HIPAA-grade compliance (unless you explicitly decide to go clinical later)
+
+Full LOINC/SNOMED mapping for every metric in the first extension wave
+
+4) Extensions roadmap (prioritized)
+Phase 1 — v1 Foundation (Security + Time)
+
+A. Auth + Multi-user (app-layer)
+B. Multiple sessions per day (timestamp)
+
+Phase 2 — v1 Data portability
+
+C. CSV/Excel import + validation + bulk edit
+D. FHIR export endpoints (Observation/Goal/Patient)
+
+Phase 3 — v2 Composition + insights + engagement
+
+E. Plicometry + BF% + derived metrics
+F. Insights (trends/plateaus/projections)
+G. Reminders + weekly/monthly summaries
+
+Phase 4 — v3 Optional “power features”
+
+H. Integrations (scale/wearables)
+I. Progress photos timeline
+
+5) Epic requirements
+Epic A — Authentication + Multi-user (Postgres, no RLS)
+Problem
+
+MVP is single-user. Need multiple users with strict access boundaries.
+
+User stories
+
+As a user, I can sign up, log in, log out.
+
+As a user, I only see my measurements/goals.
+
+As a user, I can export/delete my data.
+
+Functional requirements
+
+Auth approach (recommended)
+
+Email/password auth:
+
+Password hashing: Argon2 (preferred) or bcrypt
+
+JWT access token + refresh token
+
+Token rotation on refresh
+
+Middleware:
+
+Validates JWT
+
+Attaches req.user.id
+
+Authorization
+
+Every query must include ownership constraint, e.g. WHERE user_id = $req.user.id
+
+Never allow direct row access by id without ownership check.
+
+Data model changes
+
+Add:
+
+app_user(id uuid pk, email unique, password_hash, created_at, last_login_at)
+
+Tie subject to user:
+
+Option 1: Add user_id directly to observation and goal
+
+Option 2: Keep patient table for FHIR mapping: patient(user_id unique) and reference patient_id everywhere
+
+Recommended: keep patient to map cleanly to FHIR Patient.
+So:
+
+patient(user_id unique fk app_user.id, height_cm, display_name, ...)
+
+observation.patient_id, goal.patient_id remain as-is.
+
+Acceptance criteria
+
+Integration test: User A cannot read/write User B’s resources.
+
+All endpoints (except auth) require valid auth token.
+
+Rate limiting on auth endpoints (basic).
+
+Epic B — Multiple Sessions per Day + Provenance
+Problem
+
+Date-only entries lose fidelity (AM/PM, post-workout, fasted).
+
+Functional requirements
+
+Replace effective_date (date) with effective_at (timestamptz)
+
+Support multiple sessions per day per user
+
+Add metadata:
+
+session_tag enum-like: morning, evening, post_workout, fasted, custom
+
+source: manual | import | device
+
+Optional device_name, import_batch_id
+
+Data model changes
+
+observation.effective_at timestamptz not null
+
+Optional: observation.session_tag text null, observation.source text null, observation.device_name text null, observation.import_batch_id uuid null
+
+Add a compatibility view:
+
+effective_date := date(effective_at) for “daily” UI
+
+API changes
+
+Measurement create accepts effectiveAt ISO timestamp (UI defaults to now)
+
+Timeseries endpoints support:
+
+raw points
+
+optional aggregation: ?bucket=daily&method=last|avg
+
+Acceptance criteria
+
+Can store 2+ sessions same day without collisions.
+
+Charts render properly with raw or daily-bucketed data.
+
+Epic C — CSV/Excel Import + Data Quality + Bulk Edit
+Problem
+
+Need fast onboarding + corrections without manual editing each row.
+
+Functional requirements
+
+Import formats
+
+Wide format: one row per session, columns are metric codes
+
+Long format: columns [effective_at, metric_code, value]
+
+Import flow
+
+Upload file
+
+Preview parsed rows
+
+Validation report (errors + warnings)
+
+Confirm import (transactional)
+
+Result summary (inserted/updated/skipped)
+
+Validation
+
+Unknown metric codes → error
+
+Non-numeric values → error
+
+Suspicious changes vs last known (configurable) → warning
+
+Missing timestamp → error (or default strategy)
+
+Bulk edit
+
+UI to:
+
+delete a session
+
+edit session note/time
+
+edit component values
+
+Data model additions
+
+import_batch(id uuid pk, patient_id, created_at, filename, row_count, status)
+
+Link imported observations via import_batch_id
+
+Acceptance criteria
+
+Import is atomic per batch (unless configured partial).
+
+Downloadable error report (CSV/JSON).
+
+Epic D — FHIR Export Endpoints (Interop)
+Problem
+
+You want to consume the data via a FHIR-like contract later.
+
+Functional requirements
+
+Add endpoints that output FHIR JSON:
+
+GET /api/fhir/Patient/{id}
+
+GET /api/fhir/Observation?subject=Patient/{id}&date=ge...&date=le...
+
+GET /api/fhir/Goal?subject=Patient/{id}&date=ge...&date=le...
+
+Coding
+
+Use internal metric codes under a custom system:
+
+coding.system = "https://<your-domain>/metrics"
+
+coding.code = "waist_cm"
+
+Observation format
+
+Panel Observation per session with component[] metrics
+
+Optionally emit separate Observation for weight_kg if you want vital-sign semantics (can be a later refinement)
+
+Acceptance criteria
+
+Exported resources validate against baseline FHIR rules (unit tests).
+
+At least one external FHIR server can accept the exported JSON (manual test OK).
+
+Epic E — Body Composition (Plicometry + BF% + Derived Metrics)
+Problem
+
+Circumferences/weight don’t capture composition well.
+
+Functional requirements
+
+Add body composition entry page:
+
+skinfold sites (mm)
+
+method (Jackson-Pollock 3/7-site, Durnin-Womersley)
+
+optional demographics needed by formula (age, sex) — stored explicitly
+
+Compute and track:
+
+BF% (estimate)
+
+fat mass, lean mass
+
+Visualization: BF% timeseries + correlations (optional)
+
+Data model strategy
+
+New panel code: body-composition-panel
+
+Component metric codes: skinfold_*_mm, derived bodyfat_pct, lean_mass_kg, etc.
+
+Store computed values as either:
+
+derived Observation components, or
+
+computed views (and optionally “materialize” for speed)
+
+Acceptance criteria
+
+Method + inputs are stored so calculations are reproducible.
+
+BF% chart renders and updates with new entries.
+
+Epic F — Insights (Trends, Plateaus, Projections)
+Problem
+
+Charts are useful, but insights reduce effort and guide decisions.
+
+Functional requirements
+
+Trend lines: last 30/90 days
+
+Plateau detection: “no meaningful change for N days”
+
+Goal projection: estimated date to hit target (with confidence based on data density)
+
+Ratio analytics: shoulder/waist, chest/waist over time
+
+Implementation
+
+/api/insights?patientId=...&from=...&to=...
+
+Use simple models first (linear regression / moving averages)
+
+Always show coverage: number of points used
+
+Acceptance criteria
+
+Insights deterministic and explainable (shows the points/range used).
+
+Epic G — Reminders + Summaries (Postgres-only scheduling)
+Problem
+
+Consistency is hard without reminders and feedback.
+
+Functional requirements
+
+Reminder preferences per user:
+
+days of week + time
+
+channel: email first (push later)
+
+Weekly summary:
+
+sessions logged
+
+top metric changes
+
+goal status snapshot
+
+Monthly rollover:
+
+copy goals forward with adjustments (optional)
+
+Scheduling approach
+
+External cron/scheduler calling an endpoint (recommended)
+
+Or a small worker process if hosting allows
+
+Acceptance criteria
+
+Reminders sent on schedule for 2+ weeks reliably.
+
+Summary generated even with sparse data.
+
+Epic H — Integrations (Scale/Wearables)
+Functional requirements
+
+Start with one integration (e.g., Withings)
+
+OAuth token storage (encrypted at rest)
+
+Normalize inbound measurements to metric codes
+
+Track provenance: source=device, device_name, raw_payload_ref
+
+Acceptance criteria
+
+Device-synced weight shows in chart and can be separated/filtered by source.
+
+Epic I — Progress Photos Timeline
+Functional requirements
+
+Upload photo with timestamp + tags (front/side/back)
+
+Object storage integration (S3-compatible)
+
+Privacy: enforce ownership in app layer
+
+Timeline UI with thumbnails
+
+Acceptance criteria
+
+Photos load quickly with thumbnails; delete supported.
+
+6) Cross-cutting requirements
+
+Data integrity: metric registry is canonical; unit enforced server-side
+
+Migration safety: all schema changes are additive + backfilled safely
+
+Observability: basic request logging + error tracking
+
+Performance: indexes on (patient_id, effective_at desc), (metric_code), etc.
+
+7) Deliverables
+
+Updated DB migrations for each phase
+
+API contract updates + OpenAPI spec (optional)
+
+UI screens for each epic
+
+Test suite:
+
+auth + ownership tests
+
+import validation tests
+
+FHIR export snapshot tests
+
+8) Acceptance checklist (Extensions release)
+
+ App-layer auth implemented; ownership enforced everywhere
+
+ effective_at supports multiple sessions/day; charts support aggregation
+
+ CSV/Excel import with preview + error report
+
+ FHIR export endpoints produce valid resources
+
+ Optional: plicometry + BF% tracking implemented with reproducible formulas
+
+ Optional: reminders + weekly summaries operating via scheduler
