@@ -3,10 +3,13 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
 
+export * from "./models/auth";
+
 // === TABLE DEFINITIONS ===
 
 export const patients = pgTable("patients", {
   id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).unique(), // Link to Replit Auth user
   displayName: text("display_name").notNull(),
   heightCm: integer("height_cm"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -28,9 +31,11 @@ export const observations = pgTable("observations", {
   category: text("category").default("vital-signs"),
   // Main code for the observation panel/session
   code: text("code").default("body-metrics-panel"), 
-  effectiveDate: date("effective_date").notNull(), // The date of measurement
+  effectiveAt: timestamp("effective_at").defaultNow().notNull(), // Replaced effectiveDate with effectiveAt
   issuedAt: timestamp("issued_at").defaultNow(),
   note: text("note"),
+  sessionTag: text("session_tag"), // e.g., morning, evening, post_workout
+  source: text("source").default("manual"), // e.g., manual, device
 });
 
 export const observationComponents = pgTable("observation_components", {

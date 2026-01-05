@@ -15,10 +15,10 @@ export default function Dashboard() {
   }
 
   // Find key metrics to display on cards
-  const weight = latest?.components.find(c => c.metricCode === 'weight');
-  const bodyFat = latest?.components.find(c => c.metricCode === 'body-fat');
-  const waist = latest?.components.find(c => c.metricCode === 'waist');
-  const bmi = latest?.components.find(c => c.metricCode === 'bmi');
+  const weight = latest?.components.find((c: any) => c.metricCode === 'weight');
+  const bodyFat = latest?.components.find((c: any) => c.metricCode === 'body-fat');
+  const waist = latest?.components.find((c: any) => c.metricCode === 'waist');
+  const bmi = latest?.components.find((c: any) => c.metricCode === 'bmi');
 
   const formattedDate = latest 
     ? format(new Date(latest.effectiveDate), "MMMM do, yyyy") 
