@@ -59,7 +59,10 @@ app.use((req, res, next) => {
   next();
 });
 
+import { initBucket } from "./s3";
+
 (async () => {
+  await initBucket();
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
