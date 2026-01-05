@@ -1,0 +1,899 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<roadmap_phase2>
+    <metadata>
+        <phase>Phase 2: Data Portability</phase>
+        <status>pending</status>
+        <estimated_hours>20-28</estimated_hours>
+        <created>2026-01-04</created>
+        <description>
+            Enable data import/export capabilities with CSV/Excel import featuring
+            validation and preview, plus FHIR R4 JSON export endpoints for
+            interoperability with healthcare systems.
+        </description>
+    </metadata>
+
+    <!-- STAGE 1: Dependencies and Infrastructure -->
+    <stage id="1" name="Dependencies and Infrastructure" status="pending">
+        <task
+            id="1.1"
+            description="Install CSV/Excel parsing dependencies"
+            priority="high"
+            complexity="simple"
+            estimated_minutes="15">
+            <files>
+                <file path="package.json" action="modify" />
+                <file path="package-lock.json" action="modify" />
+            </files>
+            <commands>
+                <command>npm install papaparse xlsx</command>
+                <command>npm install --save-dev @types/papaparse</command>
+            </commands>
+            <dependencies />
+            <verification>
+                <check>package.json includes papaparse and xlsx</check>
+                <check>@types/papaparse installed for TypeScript support</check>
+            </verification>
+            <notes>papaparse for CSV, xlsx (SheetJS) for Excel files</notes>
+        </task>
+
+        <task
+            id="1.2"
+            description="Install file upload middleware"
+            priority="high"
+            complexity="simple"
+            estimated_minutes="10">
+            <files>
+                <file path="package.json" action="modify" />
+            </files>
+            <commands>
+                <command>npm install multer</command>
+                <command>npm install --save-dev @types/multer</command>
+            </commands>
+            <dependencies />
+            <verification>
+                <check>multer package installed</check>
+                <check>@types/multer installed for TypeScript support</check>
+            </verification>
+        </task>
+
+        <task
+            id="1.3"
+            description="Create shared import/export type definitions"
+            priority="high"
+            complexity="medium"
+            estimated_minutes="30">
+            <files>
+                <file path="shared/types/import-export.ts" action="create" />
+            </files>
+            <changes>
+                <change>Define ImportRow interface (date, metricCode, value, unit?, note?)</change>
+                <change>Define ImportValidationError interface (row, field, message)</change>
+                <change>Define ImportPreview interface (valid: ImportRow[], errors:
+                    ImportValidationError[], summary)</change>
+                <change>Define ImportResult interface (imported: number, skipped: number, errors:
+                    ImportValidationError[])</change>
+                <change>Define supported file formats enum (CSV, XLSX, XLS)</change>
+            </changes>
+            <dependencies />
+            <verification>
+                <check>Types exported and usable in both client and server</check>
+                <check>Types cover all import workflow states</check>
+            </verification>
+        </task>
+
+        <task
+            id="1.4"
+            description="Add import/export Zod schemas to shared/routes.ts"
+            priority="high"
+            complexity="medium"
+            estimated_minutes="25">
+            <files>
+                <file path="shared/routes.ts" action="modify" />
+            </files>
+            <changes>
+                <change>Add import.preview schema (file validation response)</change>
+                <change>Add import.confirm schema (confirmed rows to import)</change>
+                <change>Add export.fhir.observations schema (date range, format options)</change>
+                <change>Add export.fhir.patient schema</change>
+                <change>Add export.fhir.goals schema (month range)</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="1.3" />
+            </dependencies>
+            <verification>
+                <check>Schemas validate import/export request payloads</check>
+                <check>Schemas match TypeScript type definitions</check>
+            </verification>
+        </task>
+    </stage>
+
+    <!-- STAGE 2: CSV/Excel Import - Server -->
+    <stage id="2" name="Import Backend" status="pending">
+        <task
+            id="2.1"
+            description="Create file upload middleware configuration"
+            priority="high"
+            complexity="medium"
+            estimated_minutes="30">
+            <files>
+                <file path="server/middleware/upload.ts" action="create" />
+            </files>
+            <changes>
+                <change>Configure multer with memory storage</change>
+                <change>Set file size limit (5MB)</change>
+                <change>Filter allowed MIME types (text/csv, application/vnd.ms-excel,
+                    application/vnd.openxmlformats-officedocument.spreadsheetml.sheet)</change>
+                <change>Export configured multer middleware</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="1.2" />
+            </dependencies>
+            <verification>
+                <check>Middleware rejects files over 5MB</check>
+                <check>Middleware rejects non-CSV/Excel files</check>
+                <check>File buffer accessible in req.file</check>
+            </verification>
+        </task>
+
+        <task
+            id="2.2"
+            description="Create import parser service"
+            priority="high"
+            complexity="high"
+            estimated_minutes="90">
+            <files>
+                <file path="server/services/import-parser.ts" action="create" />
+            </files>
+            <changes>
+                <change>Create parseCSV(buffer: Buffer): ParsedRow[] using papaparse</change>
+                <change>Create parseExcel(buffer: Buffer): ParsedRow[] using xlsx</change>
+                <change>Auto-detect file format from buffer magic bytes</change>
+                <change>Normalize column headers (case-insensitive, trim whitespace)</change>
+                <change>Map common column name variations (e.g., "Weight (kg)" → weight)</change>
+                <change>Handle date format variations (YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY)</change>
+                <change>Return uniform ParsedRow[] regardless of source format</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="1.1" />
+                <depends_on task_id="1.3" />
+            </dependencies>
+            <verification>
+                <check>CSV parsing handles headers and data rows</check>
+                <check>Excel parsing reads first sheet by default</check>
+                <check>Date parsing handles multiple formats</check>
+                <check>Column mapping is case-insensitive</check>
+            </verification>
+        </task>
+
+        <task
+            id="2.3"
+            description="Create import validation service"
+            priority="high"
+            complexity="high"
+            estimated_minutes="60">
+            <files>
+                <file path="server/services/import-validator.ts" action="create" />
+            </files>
+            <changes>
+                <change>Validate date field is present and parseable</change>
+                <change>Validate metric codes exist in metrics table</change>
+                <change>Validate numeric values are within reasonable ranges</change>
+                <change>Validate units match metric's expected unit (or convert)</change>
+                <change>Flag duplicate entries (same date + metric)</change>
+                <change>Return ImportPreview with valid rows and errors</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="2.2" />
+            </dependencies>
+            <verification>
+                <check>Invalid dates flagged with row number and message</check>
+                <check>Unknown metric codes flagged</check>
+                <check>Value range checks (e.g., weight 20-500kg)</check>
+                <check>Duplicate detection works correctly</check>
+            </verification>
+        </task>
+
+        <task
+            id="2.4"
+            description="Create import processing service"
+            priority="high"
+            complexity="high"
+            estimated_minutes="60">
+            <files>
+                <file path="server/services/import-processor.ts" action="create" />
+            </files>
+            <changes>
+                <change>Accept validated ImportRow[] and patientId</change>
+                <change>Group rows by date for batch observation creation</change>
+                <change>Use database transaction for atomicity</change>
+                <change>Handle merge strategy: skip duplicates vs overwrite</change>
+                <change>Return ImportResult with counts and any runtime errors</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="2.3" />
+            </dependencies>
+            <verification>
+                <check>Transaction rolls back on error</check>
+                <check>Multiple metrics on same date create single observation</check>
+                <check>Duplicate handling works per strategy</check>
+                <check>Returns accurate import counts</check>
+            </verification>
+        </task>
+
+        <task
+            id="2.5"
+            description="Add import API endpoints to routes.ts"
+            priority="high"
+            complexity="medium"
+            estimated_minutes="45">
+            <files>
+                <file path="server/routes.ts" action="modify" />
+            </files>
+            <changes>
+                <change>POST /api/import/preview - upload file, return validation preview</change>
+                <change>POST /api/import/confirm - accept validated rows, perform import</change>
+                <change>GET /api/import/template - download CSV template with headers</change>
+                <change>All endpoints require isAuthenticated</change>
+                <change>All endpoints include ownership checks</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="2.1" />
+                <depends_on task_id="2.4" />
+            </dependencies>
+            <verification>
+                <check>Preview endpoint returns validation results without saving</check>
+                <check>Confirm endpoint only accepts pre-validated data</check>
+                <check>Template download works correctly</check>
+                <check>401 returned for unauthenticated requests</check>
+            </verification>
+        </task>
+    </stage>
+
+    <!-- STAGE 3: CSV/Excel Import - Client -->
+    <stage id="3" name="Import Frontend" status="pending">
+        <task
+            id="3.1"
+            description="Create import hooks"
+            priority="high"
+            complexity="medium"
+            estimated_minutes="30">
+            <files>
+                <file path="client/src/hooks/use-import.ts" action="create" />
+            </files>
+            <changes>
+                <change>useImportPreview mutation - upload file, get preview</change>
+                <change>useImportConfirm mutation - confirm import</change>
+                <change>useImportTemplate query - get template download URL</change>
+                <change>Handle file upload progress</change>
+                <change>Invalidate measurements queries on successful import</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="2.5" />
+            </dependencies>
+            <verification>
+                <check>Preview mutation accepts File object</check>
+                <check>Confirm mutation accepts validated row selection</check>
+                <check>Query invalidation triggers dashboard refresh</check>
+            </verification>
+        </task>
+
+        <task
+            id="3.2"
+            description="Create FileDropzone component"
+            priority="medium"
+            complexity="medium"
+            estimated_minutes="45">
+            <files>
+                <file path="client/src/components/import/FileDropzone.tsx" action="create" />
+            </files>
+            <changes>
+                <change>Drag-and-drop file upload area</change>
+                <change>Click to browse fallback</change>
+                <change>File type validation (CSV, XLSX, XLS)</change>
+                <change>File size validation (&lt;5MB)</change>
+                <change>Visual feedback for drag states</change>
+                <change>Display selected file name and size</change>
+            </changes>
+            <dependencies />
+            <verification>
+                <check>Drag-and-drop works in modern browsers</check>
+                <check>File validation provides user feedback</check>
+                <check>Accessible keyboard navigation</check>
+            </verification>
+        </task>
+
+        <task
+            id="3.3"
+            description="Create ImportPreviewTable component"
+            priority="high"
+            complexity="high"
+            estimated_minutes="60">
+            <files>
+                <file path="client/src/components/import/ImportPreviewTable.tsx" action="create" />
+            </files>
+            <changes>
+                <change>Display parsed rows in scrollable table</change>
+                <change>Highlight validation errors per row/cell</change>
+                <change>Show error messages on hover/click</change>
+                <change>Checkbox selection for rows to import</change>
+                <change>Select all / deselect all controls</change>
+                <change>Summary: X valid, Y errors, Z selected</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="1.3" />
+            </dependencies>
+            <verification>
+                <check>Large datasets scroll without performance issues</check>
+                <check>Error highlighting is visually clear</check>
+                <check>Selection state persists correctly</check>
+            </verification>
+        </task>
+
+        <task
+            id="3.4"
+            description="Create ImportWizard page component"
+            priority="high"
+            complexity="high"
+            estimated_minutes="90">
+            <files>
+                <file path="client/src/pages/ImportData.tsx" action="create" />
+            </files>
+            <changes>
+                <change>Step 1: File upload (FileDropzone)</change>
+                <change>Step 2: Preview &amp; validation (ImportPreviewTable)</change>
+                <change>Step 3: Confirmation &amp; options (merge strategy)</change>
+                <change>Step 4: Import progress &amp; results</change>
+                <change>Navigation between steps with back/next</change>
+                <change>Cancel button resets wizard state</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="3.1" />
+                <depends_on task_id="3.2" />
+                <depends_on task_id="3.3" />
+            </dependencies>
+            <verification>
+                <check>Wizard state preserved during navigation</check>
+                <check>Cannot proceed without valid file</check>
+                <check>Import results show success/failure counts</check>
+                <check>Redirects to dashboard on completion</check>
+            </verification>
+        </task>
+
+        <task
+            id="3.5"
+            description="Add import route and navigation"
+            priority="medium"
+            complexity="simple"
+            estimated_minutes="15">
+            <files>
+                <file path="client/src/App.tsx" action="modify" />
+                <file path="client/src/components/Sidebar.tsx" action="modify" />
+            </files>
+            <changes>
+                <change>Add Route for /import</change>
+                <change>Add sidebar link to Import Data page</change>
+                <change>Add import icon (Upload or FileSpreadsheet from Lucide)</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="3.4" />
+            </dependencies>
+            <verification>
+                <check>Navigation to /import works</check>
+                <check>Sidebar shows import option</check>
+                <check>Page renders without errors</check>
+            </verification>
+        </task>
+    </stage>
+
+    <!-- STAGE 4: FHIR Export - Server -->
+    <stage id="4" name="FHIR Export Backend" status="pending">
+        <task
+            id="4.1"
+            description="Create FHIR R4 type definitions"
+            priority="medium"
+            complexity="medium"
+            estimated_minutes="45">
+            <files>
+                <file path="shared/types/fhir.ts" action="create" />
+            </files>
+            <changes>
+                <change>Define FHIR Patient resource type</change>
+                <change>Define FHIR Observation resource type</change>
+                <change>Define FHIR Goal resource type</change>
+                <change>Define FHIR Bundle type (collection of resources)</change>
+                <change>Define FHIR CodeableConcept, Quantity, Reference types</change>
+                <change>Include LOINC code mappings for metrics</change>
+            </changes>
+            <dependencies />
+            <verification>
+                <check>Types match FHIR R4 specification</check>
+                <check>Types usable for JSON serialization</check>
+            </verification>
+            <notes>
+                Reference: https://www.hl7.org/fhir/R4/
+                LOINC codes: weight=29463-7, body_fat=41982-0, waist=56086-2
+            </notes>
+        </task>
+
+        <task
+            id="4.2"
+            description="Create LOINC code mapping configuration"
+            priority="medium"
+            complexity="simple"
+            estimated_minutes="20">
+            <files>
+                <file path="server/config/loinc-mappings.ts" action="create" />
+            </files>
+            <changes>
+                <change>Map metric codes to LOINC codes</change>
+                <change>Map metric codes to LOINC display names</change>
+                <change>Map units to UCUM codes</change>
+                <change>Export lookup functions</change>
+            </changes>
+            <dependencies />
+            <verification>
+                <check>All default metrics have LOINC mappings</check>
+                <check>Units correctly mapped to UCUM</check>
+            </verification>
+            <loinc_mappings>
+                <mapping metric="weight" loinc="29463-7" display="Body weight" />
+                <mapping metric="body_fat" loinc="41982-0" display="Body fat percentage" />
+                <mapping metric="waist" loinc="56086-2" display="Waist circumference" />
+                <mapping metric="chest" loinc="8280-0" display="Chest circumference" />
+                <mapping metric="hip" loinc="62409-8" display="Hip circumference" />
+                <mapping metric="neck" loinc="8291-7" display="Neck circumference" />
+                <mapping metric="bicep_r" loinc="8264-4" display="Right arm circumference" />
+                <mapping metric="bicep_l" loinc="8263-6" display="Left arm circumference" />
+                <mapping metric="thigh_r" loinc="8286-7" display="Right thigh circumference" />
+                <mapping metric="thigh_l" loinc="8285-9" display="Left thigh circumference" />
+            </loinc_mappings>
+        </task>
+
+        <task
+            id="4.3"
+            description="Create FHIR Patient export service"
+            priority="medium"
+            complexity="medium"
+            estimated_minutes="30">
+            <files>
+                <file path="server/services/fhir-export.ts" action="create" />
+            </files>
+            <changes>
+                <change>Create exportPatient(patient: Patient, user: User): FHIRPatient</change>
+                <change>Map patient.id to FHIR identifier</change>
+                <change>Map user.firstName/lastName to HumanName</change>
+                <change>Include meta.lastUpdated timestamp</change>
+                <change>Set resourceType: "Patient"</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="4.1" />
+            </dependencies>
+            <verification>
+                <check>Output validates against FHIR Patient schema</check>
+                <check>Identifiers use system + value format</check>
+            </verification>
+        </task>
+
+        <task
+            id="4.4"
+            description="Create FHIR Observation export service"
+            priority="high"
+            complexity="high"
+            estimated_minutes="60">
+            <files>
+                <file path="server/services/fhir-export.ts" action="modify" />
+            </files>
+            <changes>
+                <change>Create exportObservation(obs: ObservationWithComponents, patientRef:
+                    string): FHIRObservation[]</change>
+                <change>Each observation component becomes separate FHIR Observation</change>
+                <change>Map metricCode to LOINC code via lookup</change>
+                <change>Map value + unit to FHIR Quantity</change>
+                <change>Set effectiveDateTime from effectiveAt</change>
+                <change>Set status: "final"</change>
+                <change>Include subject reference to Patient</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="4.2" />
+                <depends_on task_id="4.3" />
+            </dependencies>
+            <verification>
+                <check>LOINC codes correctly populated</check>
+                <check>DateTime in ISO 8601 format</check>
+                <check>Quantity includes value, unit, system, code</check>
+            </verification>
+        </task>
+
+        <task
+            id="4.5"
+            description="Create FHIR Goal export service"
+            priority="medium"
+            complexity="medium"
+            estimated_minutes="45">
+            <files>
+                <file path="server/services/fhir-export.ts" action="modify" />
+            </files>
+            <changes>
+                <change>Create exportGoal(goal: GoalWithTargets, patientRef: string): FHIRGoal</change>
+                <change>Map goal targets to FHIR Goal.target array</change>
+                <change>Map direction to FHIR target.detailQuantity comparator</change>
+                <change>Set lifecycleStatus based on month (current=active, past=completed)</change>
+                <change>Set achievementStatus based on progress calculation</change>
+                <change>Include start/due dates from monthStart</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="4.4" />
+            </dependencies>
+            <verification>
+                <check>Goal targets correctly map metric targets</check>
+                <check>Direction maps: increase=&gt;, decrease=&lt;, maintain=~</check>
+                <check>Dates correctly set to month boundaries</check>
+            </verification>
+        </task>
+
+        <task
+            id="4.6"
+            description="Create FHIR Bundle export service"
+            priority="medium"
+            complexity="medium"
+            estimated_minutes="30">
+            <files>
+                <file path="server/services/fhir-export.ts" action="modify" />
+            </files>
+            <changes>
+                <change>Create exportBundle(resources: FHIRResource[]): FHIRBundle</change>
+                <change>Set type: "collection"</change>
+                <change>Set total count</change>
+                <change>Wrap each resource in Bundle.entry</change>
+                <change>Include meta.lastUpdated and identifier</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="4.5" />
+            </dependencies>
+            <verification>
+                <check>Bundle type is "collection"</check>
+                <check>Entry fullUrl uses UUID format</check>
+                <check>Total matches entry count</check>
+            </verification>
+        </task>
+
+        <task
+            id="4.7"
+            description="Add FHIR export API endpoints"
+            priority="high"
+            complexity="medium"
+            estimated_minutes="45">
+            <files>
+                <file path="server/routes.ts" action="modify" />
+            </files>
+            <changes>
+                <change>GET /api/export/fhir/patient - export patient resource</change>
+                <change>GET /api/export/fhir/observations?from&amp;to - export observations bundle</change>
+                <change>GET /api/export/fhir/goals?from&amp;to - export goals bundle</change>
+                <change>GET /api/export/fhir/bundle?from&amp;to - export complete bundle (patient +
+                    observations + goals)</change>
+                <change>Support JSON download with Content-Disposition header</change>
+                <change>All endpoints require isAuthenticated + ownership checks</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="4.6" />
+            </dependencies>
+            <verification>
+                <check>JSON responses valid FHIR R4</check>
+                <check>Date filtering works correctly</check>
+                <check>Download headers set for file download</check>
+                <check>401/403 for unauthorized requests</check>
+            </verification>
+        </task>
+    </stage>
+
+    <!-- STAGE 5: FHIR Export - Client -->
+    <stage id="5" name="FHIR Export Frontend" status="pending">
+        <task
+            id="5.1"
+            description="Create export hooks"
+            priority="medium"
+            complexity="simple"
+            estimated_minutes="20">
+            <files>
+                <file path="client/src/hooks/use-export.ts" action="create" />
+            </files>
+            <changes>
+                <change>useExportPatient query - fetch patient FHIR JSON</change>
+                <change>useExportObservations query - fetch observations with date range</change>
+                <change>useExportGoals query - fetch goals with date range</change>
+                <change>useExportBundle query - fetch complete bundle</change>
+                <change>downloadAsFile utility - trigger browser download</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="4.7" />
+            </dependencies>
+            <verification>
+                <check>Queries return FHIR JSON</check>
+                <check>Download triggers file save dialog</check>
+            </verification>
+        </task>
+
+        <task
+            id="5.2"
+            description="Create ExportDialog component"
+            priority="medium"
+            complexity="medium"
+            estimated_minutes="45">
+            <files>
+                <file path="client/src/components/export/ExportDialog.tsx" action="create" />
+            </files>
+            <changes>
+                <change>Modal dialog for export options</change>
+                <change>Export type selection (Patient, Observations, Goals, All)</change>
+                <change>Date range picker for observations/goals</change>
+                <change>Format indicator (FHIR R4 JSON)</change>
+                <change>Download button with loading state</change>
+                <change>Preview JSON option (collapsible)</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="5.1" />
+            </dependencies>
+            <verification>
+                <check>Dialog opens/closes correctly</check>
+                <check>Date pickers work for range selection</check>
+                <check>Download triggers file save</check>
+                <check>Loading state during fetch</check>
+            </verification>
+        </task>
+
+        <task
+            id="5.3"
+            description="Add export option to Settings or Dashboard"
+            priority="medium"
+            complexity="simple"
+            estimated_minutes="20">
+            <files>
+                <file path="client/src/pages/Dashboard.tsx" action="modify" />
+                <file path="client/src/components/Sidebar.tsx" action="modify" />
+            </files>
+            <changes>
+                <change>Add "Export Data" button to Dashboard actions</change>
+                <change>Add export link in sidebar (optional)</change>
+                <change>ExportDialog triggered on click</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="5.2" />
+            </dependencies>
+            <verification>
+                <check>Export button visible and clickable</check>
+                <check>Dialog opens when clicked</check>
+                <check>Export workflow completes successfully</check>
+            </verification>
+        </task>
+    </stage>
+
+    <!-- STAGE 6: Testing and Verification -->
+    <stage id="6" name="Testing and Verification" status="pending">
+        <task
+            id="6.1"
+            description="Test CSV import workflow"
+            priority="critical"
+            complexity="high"
+            estimated_minutes="60">
+            <test_cases>
+                <test>Upload valid CSV file with all columns</test>
+                <test>Upload CSV with missing optional columns (unit, note)</test>
+                <test>Upload CSV with invalid dates - errors flagged</test>
+                <test>Upload CSV with unknown metric codes - errors flagged</test>
+                <test>Upload CSV with out-of-range values - warnings shown</test>
+                <test>Preview shows correct valid/error counts</test>
+                <test>Confirm imports only selected rows</test>
+                <test>Imported data appears in measurements list</test>
+                <test>Duplicate handling (skip strategy) works</test>
+            </test_cases>
+            <dependencies>
+                <depends_on task_id="3.5" />
+            </dependencies>
+            <verification>
+                <check>Complete import workflow functional</check>
+                <check>Error handling covers edge cases</check>
+                <check>Data integrity maintained</check>
+            </verification>
+        </task>
+
+        <task
+            id="6.2"
+            description="Test Excel import workflow"
+            priority="high"
+            complexity="medium"
+            estimated_minutes="45">
+            <test_cases>
+                <test>Upload valid XLSX file</test>
+                <test>Upload valid XLS file (legacy format)</test>
+                <test>Upload multi-sheet file - first sheet used</test>
+                <test>Upload file with formatted cells - values extracted correctly</test>
+                <test>Upload file with date formatting - dates parsed correctly</test>
+            </test_cases>
+            <dependencies>
+                <depends_on task_id="6.1" />
+            </dependencies>
+            <verification>
+                <check>Both XLSX and XLS formats work</check>
+                <check>Cell formatting doesn't break parsing</check>
+            </verification>
+        </task>
+
+        <task
+            id="6.3"
+            description="Test FHIR export outputs"
+            priority="high"
+            complexity="high"
+            estimated_minutes="60">
+            <test_cases>
+                <test>Export Patient returns valid FHIR Patient JSON</test>
+                <test>Export Observations returns valid FHIR Bundle</test>
+                <test>Observation LOINC codes are correct</test>
+                <test>Date range filtering works for observations</test>
+                <test>Export Goals returns valid FHIR Bundle</test>
+                <test>Goal direction maps correctly to comparator</test>
+                <test>Complete bundle includes all resource types</test>
+                <test>Downloaded file name includes date</test>
+            </test_cases>
+            <dependencies>
+                <depends_on task_id="5.3" />
+            </dependencies>
+            <verification>
+                <check>JSON validates against FHIR R4 schema</check>
+                <check>LOINC codes match metric types</check>
+                <check>File download works in all browsers</check>
+            </verification>
+            <validation_tool>
+                Use https://inferno.healthit.gov/ or official FHIR validator
+            </validation_tool>
+        </task>
+
+        <task
+            id="6.4"
+            description="Test multi-user data isolation for import/export"
+            priority="critical"
+            complexity="medium"
+            estimated_minutes="30">
+            <test_cases>
+                <test>User A imports data - visible only to User A</test>
+                <test>User B cannot see User A's imported data</test>
+                <test>User A's export contains only User A's data</test>
+                <test>User B's export contains only User B's data</test>
+            </test_cases>
+            <dependencies>
+                <depends_on task_id="6.3" />
+            </dependencies>
+            <verification>
+                <check>Complete data isolation maintained</check>
+                <check>Ownership checks enforced on import</check>
+                <check>Ownership checks enforced on export</check>
+            </verification>
+        </task>
+    </stage>
+
+    <!-- STAGE 7: Documentation -->
+    <stage id="7" name="Documentation" status="pending">
+        <task
+            id="7.1"
+            description="Create import documentation"
+            priority="low"
+            complexity="simple"
+            estimated_minutes="30">
+            <files>
+                <file path="docs/import.md" action="create" />
+            </files>
+            <changes>
+                <change>Document supported file formats</change>
+                <change>Document required columns and optional columns</change>
+                <change>Document date format requirements</change>
+                <change>Document metric code values</change>
+                <change>Include sample CSV content</change>
+                <change>Troubleshooting common errors</change>
+            </changes>
+            <dependencies />
+            <verification>
+                <check>Documentation covers all import scenarios</check>
+                <check>Sample CSV is valid and works</check>
+            </verification>
+        </task>
+
+        <task
+            id="7.2"
+            description="Create FHIR export documentation"
+            priority="low"
+            complexity="simple"
+            estimated_minutes="30">
+            <files>
+                <file path="docs/fhir-export.md" action="create" />
+            </files>
+            <changes>
+                <change>Document FHIR R4 compliance</change>
+                <change>Document available export endpoints</change>
+                <change>Document LOINC code mappings</change>
+                <change>Document use cases (health app integration, EHR import)</change>
+                <change>Include sample FHIR JSON output</change>
+            </changes>
+            <dependencies />
+            <verification>
+                <check>Documentation covers export capabilities</check>
+                <check>LOINC mappings documented</check>
+            </verification>
+        </task>
+
+        <task
+            id="7.3"
+            description="Update CLAUDE.md with import/export info"
+            priority="medium"
+            complexity="simple"
+            estimated_minutes="15">
+            <files>
+                <file path="CLAUDE.md" action="modify" />
+            </files>
+            <changes>
+                <change>Add import/export endpoints to API Routes Contract section</change>
+                <change>Add FHIR types location to Project Structure</change>
+                <change>Add papaparse, xlsx, multer to dependencies info</change>
+            </changes>
+            <dependencies>
+                <depends_on task_id="7.1" />
+                <depends_on task_id="7.2" />
+            </dependencies>
+            <verification>
+                <check>CLAUDE.md reflects new import/export features</check>
+            </verification>
+        </task>
+    </stage>
+
+    <!-- Success Criteria -->
+    <success_criteria>
+        <criterion id="csv_import">Users can import measurements from CSV files</criterion>
+        <criterion id="excel_import">Users can import measurements from Excel files (XLSX/XLS)</criterion>
+        <criterion id="validation">Import validation catches errors and shows preview before
+            committing</criterion>
+        <criterion id="fhir_patient">FHIR R4 Patient export functional</criterion>
+        <criterion id="fhir_observations">FHIR R4 Observation export with LOINC codes</criterion>
+        <criterion id="fhir_goals">FHIR R4 Goal export functional</criterion>
+        <criterion id="fhir_bundle">Complete FHIR Bundle export combines all resources</criterion>
+        <criterion id="isolation">Multi-user isolation maintained for import/export</criterion>
+        <criterion id="documentation">Import/export documented with examples</criterion>
+    </success_criteria>
+
+    <!-- Risk Assessment -->
+    <risks>
+        <risk severity="high" mitigation="Strict validation and preview before commit">
+            Malformed import data corrupts database
+        </risk>
+        <risk severity="high" mitigation="Consistent date parsing with explicit format hints">
+            Date format ambiguity (DD/MM vs MM/DD)
+        </risk>
+        <risk severity="medium" mitigation="Use official FHIR validator, follow spec closely">
+            FHIR output doesn't validate against R4 spec
+        </risk>
+        <risk severity="medium" mitigation="Cell value extraction handles type coercion">
+            Excel cell formatting causes parsing errors
+        </risk>
+        <risk severity="medium" mitigation="Implement batch processing with progress">
+            Large file imports timeout or crash
+        </risk>
+        <risk severity="low" mitigation="Provide unit conversion utility">
+            Unit mismatch between import data and metric configuration
+        </risk>
+    </risks>
+
+    <!-- Next Phases -->
+    <next_phases>
+        <phase id="3" name="Composition and Engagement">
+            Plicometry (Skinfold) inputs &amp; BF% formulas, trend analysis &amp; goal projections,
+            weekly/monthly summaries &amp; reminders
+        </phase>
+        <future_enhancements>
+            <item>CSV export (non-FHIR) for spreadsheet users</item>
+            <item>Apple Health integration via HealthKit</item>
+            <item>Google Fit integration</item>
+            <item>Scheduled automatic exports</item>
+            <item>Import history and undo functionality</item>
+            <item>Column mapping UI for non-standard CSV formats</item>
+            <item>FHIR Bulk Data export for large datasets</item>
+        </future_enhancements>
+    </next_phases>
+</roadmap_phase2>

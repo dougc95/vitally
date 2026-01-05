@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 export default function NewMeasurement() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { data: bootstrap, isLoading: isBootstrapLoading } = useBootstrap();
+  const { data: bootstrap, isLoading: isBootstrapLoading, isError: isBootstrapError } = useBootstrap();
   const createMutation = useCreateMeasurement();
 
   const [date, setDate] = useState<Date>(new Date());
@@ -71,6 +71,19 @@ export default function NewMeasurement() {
       <PageLayout title="New Measurement">
         <div className="flex items-center justify-center h-64">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </PageLayout>
+    );
+  }
+
+  if (isBootstrapError) {
+    return (
+      <PageLayout title="New Measurement">
+        <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
+          <p className="text-destructive font-medium">Failed to load metrics configuration.</p>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
         </div>
       </PageLayout>
     );
