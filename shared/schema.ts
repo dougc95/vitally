@@ -1,8 +1,9 @@
-import { pgTable, text, serial, integer, boolean, timestamp, date, numeric, real } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, date, numeric, real, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
 
+import { users } from "./models/auth";
 export * from "./models/auth";
 
 // === TABLE DEFINITIONS ===

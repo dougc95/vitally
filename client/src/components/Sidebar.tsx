@@ -1,13 +1,15 @@
 import { Link, useLocation } from "wouter";
-import { 
-  LayoutDashboard, 
-  Activity, 
-  Target, 
-  LineChart, 
-  PlusCircle, 
-  Settings 
+import {
+  LayoutDashboard,
+  Activity,
+  Target,
+  LineChart,
+  PlusCircle,
+  LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
+import { Button } from "@/components/ui/button";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -18,6 +20,27 @@ const navigation = [
 
 export function Sidebar() {
   const [location] = useLocation();
+  const { user, logout, isLoggingOut } = useAuth();
+
+  // Generate initials from user name or email
+  const getInitials = () => {
+    if (!user) return "?";
+    if (user.firstName) {
+      const first = user.firstName.charAt(0).toUpperCase();
+      const last = user.lastName ? user.lastName.charAt(0).toUpperCase() : "";
+      return first + last;
+    }
+    return user.email?.charAt(0).toUpperCase() || "?";
+  };
+
+  // Get display name
+  const getDisplayName = () => {
+    if (!user) return "User";
+    if (user.firstName) {
+      return `${user.firstName} ${user.lastName || ""}`.trim();
+    }
+    return user.email || "User";
+  };
 
   return (
     <div className="hidden lg:flex flex-col w-64 border-r border-border bg-card/50 backdrop-blur-xl h-screen sticky top-0">
@@ -35,13 +58,13 @@ export function Sidebar() {
           {navigation.map((item) => {
             const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
             return (
-              <Link 
-                key={item.name} 
+              <Link
+                key={item.name}
                 href={item.href}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group",
-                  isActive 
-                    ? "bg-primary/10 text-primary shadow-sm" 
+                  isActive
+                    ? "bg-primary/10 text-primary shadow-sm"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
@@ -56,17 +79,26 @@ export function Sidebar() {
         </nav>
       </div>
 
-      <div className="mt-auto p-6 border-t border-border/50">
+      <div className="mt-auto p-6 border-t border-border/50 space-y-3">
         <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200">
           <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
-            <span className="text-xs font-bold text-slate-600">JS</span>
+            <span className="text-xs font-bold text-slate-600">{getInitials()}</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-slate-900 truncate">John Smith</p>
-            <p className="text-xs text-slate-500 truncate">Pro Member</p>
+            <p className="text-sm font-semibold text-slate-900 truncate">{getDisplayName()}</p>
+            <p className="text-xs text-slate-500 truncate">{user?.email || ""}</p>
           </div>
-          <Settings className="w-4 h-4 text-slate-400 cursor-pointer hover:text-slate-600" />
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-muted-foreground hover:text-foreground"
+          onClick={() => logout()}
+          disabled={isLoggingOut}
+        >
+          <LogOut className="w-4 h-4 mr-2" />
+          {isLoggingOut ? "Logging out..." : "Logout"}
+        </Button>
       </div>
     </div>
   );

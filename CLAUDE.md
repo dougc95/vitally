@@ -17,6 +17,12 @@ npm start            # Run production build
 npm run db:push      # Push schema changes to PostgreSQL (no migrations)
 ```
 
+**Docker (Local DB):**
+```bash
+docker-compose up -d # Start Postgres database in background
+docker-compose down  # Stop database
+```
+
 **Environment Setup:**
 - Requires `DATABASE_URL` environment variable for PostgreSQL connection
 - Uses Replit Auth integration (requires Replit environment)

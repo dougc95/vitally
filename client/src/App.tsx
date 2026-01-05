@@ -3,19 +3,43 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import NewMeasurement from "@/pages/NewMeasurement";
 import MetricsExplorer from "@/pages/MetricsExplorer";
 import Goals from "@/pages/Goals";
+import Login from "@/pages/Login";
+import Signup from "@/pages/Signup";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/measurements/new" component={NewMeasurement} />
-      <Route path="/metrics" component={MetricsExplorer} />
-      <Route path="/goals" component={Goals} />
+      {/* Public routes */}
+      <Route path="/login" component={Login} />
+      <Route path="/signup" component={Signup} />
+
+      {/* Protected routes */}
+      <Route path="/">
+        <ProtectedRoute>
+          <Dashboard />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/measurements/new">
+        <ProtectedRoute>
+          <NewMeasurement />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/metrics">
+        <ProtectedRoute>
+          <MetricsExplorer />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/goals">
+        <ProtectedRoute>
+          <Goals />
+        </ProtectedRoute>
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );

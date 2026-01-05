@@ -17,7 +17,7 @@ app.use(
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
-  }),
+  })
 );
 
 app.use(express.urlencoded({ extended: false }));
@@ -89,10 +89,9 @@ app.use((req, res, next) => {
     {
       port,
       host: "0.0.0.0",
-      reusePort: true,
     },
     () => {
       log(`serving on port ${port}`);
-    },
+    }
   );
 })();

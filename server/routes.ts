@@ -4,25 +4,95 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { Metric } from "@shared/schema";
-import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
+import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 
 // Seed Data
 const DEFAULT_METRICS: Metric[] = [
   // Weights
-  { code: "weight", displayName: "Weight", unit: "kg", kind: "weight", defaultDirection: "decrease", defaultTolerance: 0.5 },
-  
+  {
+    code: "weight",
+    displayName: "Weight",
+    unit: "kg",
+    kind: "weight",
+    defaultDirection: "decrease",
+    defaultTolerance: 0.5,
+  },
+
   // Circumferences
-  { code: "waist", displayName: "Waist", unit: "cm", kind: "circumference", defaultDirection: "decrease", defaultTolerance: 0.5 },
-  { code: "hips", displayName: "Hips", unit: "cm", kind: "circumference", defaultDirection: "decrease", defaultTolerance: 0.5 },
-  { code: "chest", displayName: "Chest", unit: "cm", kind: "circumference", defaultDirection: "increase", defaultTolerance: 0.5 },
-  { code: "shoulders", displayName: "Shoulders", unit: "cm", kind: "circumference", defaultDirection: "increase", defaultTolerance: 0.5 },
-  { code: "thigh_r", displayName: "Thigh (R)", unit: "cm", kind: "circumference", defaultDirection: "increase", defaultTolerance: 0.5 },
-  { code: "thigh_l", displayName: "Thigh (L)", unit: "cm", kind: "circumference", defaultDirection: "increase", defaultTolerance: 0.5 },
-  { code: "bicep_r", displayName: "Bicep (R)", unit: "cm", kind: "circumference", defaultDirection: "increase", defaultTolerance: 0.5 },
-  { code: "bicep_l", displayName: "Bicep (L)", unit: "cm", kind: "circumference", defaultDirection: "increase", defaultTolerance: 0.5 },
-  
+  {
+    code: "waist",
+    displayName: "Waist",
+    unit: "cm",
+    kind: "circumference",
+    defaultDirection: "decrease",
+    defaultTolerance: 0.5,
+  },
+  {
+    code: "hips",
+    displayName: "Hips",
+    unit: "cm",
+    kind: "circumference",
+    defaultDirection: "decrease",
+    defaultTolerance: 0.5,
+  },
+  {
+    code: "chest",
+    displayName: "Chest",
+    unit: "cm",
+    kind: "circumference",
+    defaultDirection: "increase",
+    defaultTolerance: 0.5,
+  },
+  {
+    code: "shoulders",
+    displayName: "Shoulders",
+    unit: "cm",
+    kind: "circumference",
+    defaultDirection: "increase",
+    defaultTolerance: 0.5,
+  },
+  {
+    code: "thigh_r",
+    displayName: "Thigh (R)",
+    unit: "cm",
+    kind: "circumference",
+    defaultDirection: "increase",
+    defaultTolerance: 0.5,
+  },
+  {
+    code: "thigh_l",
+    displayName: "Thigh (L)",
+    unit: "cm",
+    kind: "circumference",
+    defaultDirection: "increase",
+    defaultTolerance: 0.5,
+  },
+  {
+    code: "bicep_r",
+    displayName: "Bicep (R)",
+    unit: "cm",
+    kind: "circumference",
+    defaultDirection: "increase",
+    defaultTolerance: 0.5,
+  },
+  {
+    code: "bicep_l",
+    displayName: "Bicep (L)",
+    unit: "cm",
+    kind: "circumference",
+    defaultDirection: "increase",
+    defaultTolerance: 0.5,
+  },
+
   // Body Fat
-  { code: "body_fat", displayName: "Body Fat %", unit: "%", kind: "composition", defaultDirection: "decrease", defaultTolerance: 0.5 },
+  {
+    code: "body_fat",
+    displayName: "Body Fat %",
+    unit: "%",
+    kind: "composition",
+    defaultDirection: "decrease",
+    defaultTolerance: 0.5,
+  },
 ];
 
 async function seedMetrics() {
@@ -35,7 +105,6 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  
   // Setup Auth FIRST
   await setupAuth(app);
   registerAuthRoutes(app);
@@ -45,13 +114,13 @@ export async function registerRoutes(
 
   // Helper to get or create patient for logged in user
   async function getOrCreatePatient(req: any) {
-    const userId = req.user.claims.sub;
+    const userId = req.user.id;
     let patient = await storage.getPatientByUserId(userId);
     if (!patient) {
-      patient = await storage.createPatient({ 
+      patient = await storage.createPatient({
         userId,
-        displayName: req.user.claims.first_name || "User",
-        heightCm: 175 // Default
+        displayName: req.user.firstName || req.user.email || "User",
+        heightCm: 175, // Default
       });
     }
     return patient;
@@ -69,22 +138,31 @@ export async function registerRoutes(
     try {
       const input = api.measurements.create.input.parse(req.body);
       const patient = await getOrCreatePatient(req);
-      
+
       // Validate metric codes
       const validMetrics = await storage.getMetrics();
-      const validCodes = new Set(validMetrics.map(m => m.code));
-      
+      const validCodes = new Set(validMetrics.map((m) => m.code));
+
       for (const code of Object.keys(input.metrics)) {
         if (!validCodes.has(code)) {
-           return res.status(400).json({ message: `Unknown metric code: ${code}` });
+          return res
+            .status(400)
+            .json({ message: `Unknown metric code: ${code}` });
         }
       }
 
-      const result = await storage.createMeasurement(input, patient.id);
+      const result = await storage.createMeasurement(
+        input,
+        patient.id,
+        req.user!.id
+      );
       res.status(201).json(result);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join('.') });
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join("."),
+        });
       }
       throw err;
     }
@@ -92,26 +170,37 @@ export async function registerRoutes(
 
   app.get(api.measurements.latest.path, isAuthenticated, async (req, res) => {
     const patient = await getOrCreatePatient(req);
-    const latest = await storage.getLatestObservation(patient.id);
+    const latest = await storage.getLatestObservation(patient.id, req.user!.id);
     res.json(latest || null);
   });
 
   app.get(api.measurements.list.path, isAuthenticated, async (req, res) => {
     const patient = await getOrCreatePatient(req);
-    const { from, to } = req.query as { from?: string, to?: string };
-    const list = await storage.getObservations(patient.id, from, to);
+    const { from, to } = req.query as { from?: string; to?: string };
+    const list = await storage.getObservations(
+      patient.id,
+      from,
+      to,
+      req.user!.id
+    );
     res.json(list);
   });
 
   app.get(api.metrics.timeseries.path, isAuthenticated, async (req, res) => {
     const patient = await getOrCreatePatient(req);
     const { code } = req.params;
-    const { from, to } = req.query as { from?: string, to?: string };
-    
+    const { from, to } = req.query as { from?: string; to?: string };
+
     const metric = await storage.getMetric(code);
     if (!metric) return res.status(404).json({ message: "Metric not found" });
 
-    const data = await storage.getMetricTimeseries(patient.id, code, from, to);
+    const data = await storage.getMetricTimeseries(
+      patient.id,
+      code,
+      from,
+      to,
+      req.user!.id
+    );
     res.json(data);
   });
 
@@ -120,7 +209,7 @@ export async function registerRoutes(
     const month = req.query.month as string;
     if (!month) return res.status(400).json({ message: "Month is required" });
 
-    const goal = await storage.getGoal(patient.id, month);
+    const goal = await storage.getGoal(patient.id, month, req.user!.id);
     res.json(goal || null);
   });
 
@@ -128,7 +217,7 @@ export async function registerRoutes(
     try {
       const input = api.goals.upsert.input.parse(req.body);
       const patient = await getOrCreatePatient(req);
-      const goal = await storage.upsertGoal(input, patient.id);
+      const goal = await storage.upsertGoal(input, patient.id, req.user!.id);
       res.json(goal);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -148,14 +237,21 @@ export async function registerRoutes(
     const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     const monthEnd = `${month}-${lastDay}`;
 
-    const goal = await storage.getGoal(patient.id, month);
+    const goal = await storage.getGoal(patient.id, month, req.user!.id);
     if (!goal) return res.json([]);
 
     const report = [];
     for (const target of goal.targets) {
-      const currentVal = await storage.getLatestMetricValueInMonth(patient.id, target.metricCode, monthStart, monthEnd);
-      
-      let status: "on-track" | "off-track" | "no-data" | "no-target" = "no-data";
+      const currentVal = await storage.getLatestMetricValueInMonth(
+        patient.id,
+        target.metricCode,
+        monthStart,
+        monthEnd,
+        req.user!.id
+      );
+
+      let status: "on-track" | "off-track" | "no-data" | "no-target" =
+        "no-data";
       let delta: number | null = null;
 
       if (currentVal !== undefined && currentVal !== null) {
@@ -164,13 +260,13 @@ export async function registerRoutes(
         const tolerance = target.tolerance || 0;
 
         if (target.direction === "maintain") {
-           status = absDelta <= tolerance ? "on-track" : "off-track";
+          status = absDelta <= tolerance ? "on-track" : "off-track";
         } else if (target.direction === "increase") {
-           if (currentVal >= target.targetValue - tolerance) status = "on-track";
-           else status = "off-track";
+          if (currentVal >= target.targetValue - tolerance) status = "on-track";
+          else status = "off-track";
         } else if (target.direction === "decrease") {
-           if (currentVal <= target.targetValue + tolerance) status = "on-track";
-           else status = "off-track";
+          if (currentVal <= target.targetValue + tolerance) status = "on-track";
+          else status = "off-track";
         }
       }
 
@@ -182,7 +278,7 @@ export async function registerRoutes(
         unit: target.unit,
         status,
         delta: delta,
-        direction: target.direction || undefined
+        direction: target.direction || undefined,
       });
     }
 

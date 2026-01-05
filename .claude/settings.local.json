@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la \"D:\\\\Code\\\\Personal\\\\Body-Metrics-Tracker\\\\server\\\\replit_integrations\"\" 2>/dev/null || echo \"Directory does not exist \")",
+      "Bash(cat:*)"
+    ]
+  }
+}
