@@ -11,6 +11,7 @@ import MetricsExplorer from "@/pages/MetricsExplorer";
 import Goals from "@/pages/Goals";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
+import ImportData from "@/pages/ImportData";
 
 function Router() {
   return (
@@ -38,6 +39,11 @@ function Router() {
       <Route path="/goals">
         <ProtectedRoute>
           <Goals />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/import">
+        <ProtectedRoute>
+            <ImportData />
         </ProtectedRoute>
       </Route>
       <Route component={NotFound} />

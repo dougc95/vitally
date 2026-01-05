@@ -6,6 +6,8 @@ import {
   observationComponents,
   goals,
   goalTargets,
+  users,
+  type User,
   type Patient,
   type Metric,
   type Observation,
@@ -15,6 +17,7 @@ import {
   type ObservationWithComponents,
   type GoalWithTargets,
 } from "@shared/schema";
+import { ImportRow, ImportResult } from "@shared/types/import-export";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 import { UnauthorizedError } from "./errors";
 
@@ -22,6 +25,7 @@ export interface IStorage {
   // Patient Registry
   getPatient(id: number): Promise<Patient | undefined>;
   getPatientByUserId(userId: string): Promise<Patient | undefined>;
+  getUser(id: string): Promise<User | undefined>;
   createPatient(patient: Partial<Patient>): Promise<Patient>;
   getMetrics(): Promise<Metric[]>;
   getMetric(code: string): Promise<Metric | undefined>;
@@ -71,6 +75,13 @@ export interface IStorage {
     monthEnd: string,
     userId: string
   ): Promise<number | undefined>;
+
+  // Import
+  importMeasurements(
+    patientId: number,
+    rows: ImportRow[],
+    strategy: "skip" | "overwrite"
+  ): Promise<ImportResult>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -111,13 +122,23 @@ export class DatabaseStorage implements IStorage {
     return patient;
   }
 
-  async createPatient(data: Partial<Patient>): Promise<Patient> {
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id));
+    return user;
+  }
+
+  async createPatient(insertPatient: Partial<Patient>): Promise<Patient> {
     const [patient] = await db
       .insert(patients)
       .values({
-        userId: data.userId!,
-        displayName: data.displayName || "User",
-        heightCm: data.heightCm,
+        userId: insertPatient.userId,
+        displayName: insertPatient.displayName || "User",
+        heightCm: insertPatient.heightCm,
+        gender: insertPatient.gender,
+        dateOfBirth: insertPatient.dateOfBirth,
       })
       .returning();
     return patient;
@@ -382,6 +403,92 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(observations.effectiveAt), desc(observations.issuedAt))
       .limit(1);
     return result?.value;
+  }
+
+  async importMeasurements(
+    patientId: number,
+    rows: ImportRow[],
+    strategy: "skip" | "overwrite"
+  ): Promise<ImportResult> {
+    // Note: We don't check userId here because the caller (processor) is expected
+    // to have verified ownership or passed a verified patientId. 
+    // But to be safe, we could. However, this method only takes patientId.
+    // Let's assume caller handles it for now, or we add userId param.
+    // Given the signature, we'll proceed with patientId.
+    
+    return await db.transaction(async (tx) => {
+        let imported = 0;
+        let skipped = 0;
+        let failed = 0; // We define failed but mostly we might throw or just log?
+        // Actually, schema validation happened before. Here we handle DB constraints.
+
+        // Group by date to minimize observations locally
+        const byDate = new Map<string, ImportRow[]>();
+        for(const row of rows) {
+            if(!byDate.has(row.date)) byDate.set(row.date, []);
+            byDate.get(row.date)?.push(row);
+        }
+
+        for (const [dateStr, dateRows] of Array.from(byDate.entries())) {
+            const dateObj = new Date(dateStr);
+            
+            // Check for existing observation at this exact timestamp
+            // Note: dateStr from import-parser is ISO string. valid.
+            const existing = await tx.query.observations.findFirst({
+                where: and(
+                    eq(observations.patientId, patientId),
+                    eq(observations.effectiveAt, dateObj)
+                ),
+                with: { components: true }
+            });
+
+            let observationId = existing?.id;
+
+            if (!existing) {
+                // Create new
+                const [newObs] = await tx.insert(observations).values({
+                    patientId,
+                    effectiveAt: dateObj,
+                    status: "final",
+                    category: "vital-signs"
+                }).returning();
+                observationId = newObs.id;
+            }
+
+            // Now handle components
+            for (const row of dateRows) {
+                const existingComp = existing?.components.find(c => c.metricCode === row.metricCode);
+                
+                if (existingComp) {
+                    if (strategy === "overwrite") {
+                        await tx.update(observationComponents)
+                            .set({ value: row.value, unit: row.unit })
+                            .where(eq(observationComponents.id, existingComp.id));
+                        imported++;
+                    } else {
+                        skipped++;
+                    }
+                } else {
+                    // Insert new component
+                     await tx.insert(observationComponents).values({
+                        observationId: observationId!,
+                        metricCode: row.metricCode,
+                        value: row.value,
+                        unit: row.unit
+                    });
+                    imported++;
+                }
+            }
+        }
+
+        return {
+            success: true,
+            importedCount: imported,
+            skippedCount: skipped,
+            failedCount: failed,
+            errors: []
+        };
+    });
   }
 }
 

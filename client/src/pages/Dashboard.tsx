@@ -5,6 +5,7 @@ import { QuickAction } from "@/components/QuickAction";
 import { PlusCircle, Target, TrendingUp, History } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ExportDialog } from "@/components/export/ExportDialog";
 
 export default function Dashboard() {
   const { data: latest, isLoading: isLoadingLatest } = useLatestMeasurement();
@@ -30,6 +31,7 @@ export default function Dashboard() {
     <PageLayout
       title={`Welcome back, ${bootstrap?.patient.displayName || "User"}`}
       subtitle={`Last update: ${formattedDate}`}
+      actions={<ExportDialog />}
     >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
         <QuickAction

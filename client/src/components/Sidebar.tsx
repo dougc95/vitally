@@ -5,7 +5,8 @@ import {
   Target,
   LineChart,
   PlusCircle,
-  LogOut
+  LogOut,
+  UploadCloud
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,6 +17,7 @@ const navigation = [
   { name: "Add Metrics", href: "/measurements/new", icon: PlusCircle },
   { name: "Analytics", href: "/metrics", icon: LineChart },
   { name: "Goals", href: "/goals", icon: Target },
+  { name: "Import Data", href: "/import", icon: UploadCloud },
 ];
 
 export function Sidebar() {

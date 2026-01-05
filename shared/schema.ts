@@ -13,6 +13,8 @@ export const patients = pgTable("patients", {
   userId: varchar("user_id").references(() => users.id).unique(), // Link to Replit Auth user
   displayName: text("display_name").notNull(),
   heightCm: integer("height_cm"),
+  gender: text("gender"), // 'male', 'female', 'other', 'unknown'
+  dateOfBirth: date("date_of_birth"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -126,6 +126,80 @@ export const api = {
       },
     },
   },
+  import: {
+      preview: {
+          method: 'POST' as const,
+          path: '/api/import/preview',
+          // multipart/form-data, body is not JSON validated here, handled by multer
+          responses: {
+              200: z.custom<any>(), // ImportPreview
+              400: errorSchemas.validation,
+          }
+      },
+      confirm: {
+          method: 'POST' as const,
+          path: '/api/import/confirm',
+          input: z.object({
+              rows: z.array(z.custom<any>()), // ImportRow[]
+              mergeStrategy: z.enum(['skip', 'overwrite']).default('skip')
+          }),
+          responses: {
+              200: z.custom<any>(), // ImportResult
+              400: errorSchemas.validation,
+          }
+      },
+      template: {
+          method: 'GET' as const,
+          path: '/api/import/template',
+          responses: {
+              200: z.any(), // File download
+          }
+      }
+  },
+  export: {
+      fhir: {
+          patient: {
+              method: 'GET' as const,
+              path: '/api/export/fhir/patient',
+              responses: {
+                  200: z.custom<any>(), // FHIRPatient
+              }
+          },
+          observations: {
+              method: 'GET' as const,
+              path: '/api/export/fhir/observations',
+              input: z.object({
+                  from: z.string().optional(),
+                  to: z.string().optional(),
+              }).optional(),
+              responses: {
+                  200: z.custom<any>(), // FHIRBundle
+              }
+          },
+          goals: {
+              method: 'GET' as const,
+              path: '/api/export/fhir/goals',
+              input: z.object({
+                  from: z.string().optional(),
+                  to: z.string().optional(),
+              }).optional(),
+              responses: {
+                  200: z.custom<any>(), // FHIRBundle
+              }
+          },
+          bundle: {
+              method: 'GET' as const,
+              path: '/api/export/fhir/bundle',
+              input: z.object({
+                  from: z.string().optional(),
+                  to: z.string().optional(),
+              }).optional(),
+              responses: {
+                  200: z.custom<any>(), // FHIRBundle
+              }
+          }
+      }
+  }
 };
 
 // ============================================

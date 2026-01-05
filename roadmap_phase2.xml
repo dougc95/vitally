@@ -13,13 +13,41 @@
     </metadata>
 
     <!-- STAGE 1: Dependencies and Infrastructure -->
-    <stage id="1" name="Dependencies and Infrastructure" status="pending">
+    <stage id="1" name="Dependencies and Infrastructure" status="completed">
+        <task
+            id="1.0"
+            description="Setup S3/MinIO Infrastructure"
+            priority="critical"
+            complexity="medium"
+            estimated_minutes="45"
+            status="completed">
+            <files>
+                <file path="docker-compose.yml" action="modify" />
+                <file path="server/s3.ts" action="create" />
+                <file path=".env.example" action="modify" />
+                <file path="package.json" action="modify" />
+            </files>
+            <changes>
+                <change>Add MinIO service to docker-compose</change>
+                <change>Install @aws-sdk/client-s3</change>
+                <change>Create S3 client configuration with MinIO support</change>
+                <change>Add S3 environment variables</change>
+                <change>Verify S3 connectivity with script</change>
+            </changes>
+            <dependencies />
+            <verification>
+                <check>MinIO container running</check>
+                <check>S3 client connects to local MinIO</check>
+                <check>Bucket auto-creation works</check>
+            </verification>
+        </task>
         <task
             id="1.1"
             description="Install CSV/Excel parsing dependencies"
             priority="high"
             complexity="simple"
-            estimated_minutes="15">
+            estimated_minutes="15"
+            status="completed">
             <files>
                 <file path="package.json" action="modify" />
                 <file path="package-lock.json" action="modify" />
@@ -108,7 +136,7 @@
     </stage>
 
     <!-- STAGE 2: CSV/Excel Import - Server -->
-    <stage id="2" name="Import Backend" status="pending">
+    <stage id="2" name="Import Backend" status="completed">
         <task
             id="2.1"
             description="Create file upload middleware configuration"
@@ -250,7 +278,7 @@
     </stage>
 
     <!-- STAGE 3: CSV/Excel Import - Client -->
-    <stage id="3" name="Import Frontend" status="pending">
+    <stage id="3" name="Import Frontend" status="completed">
         <task
             id="3.1"
             description="Create import hooks"
@@ -386,7 +414,7 @@
     </stage>
 
     <!-- STAGE 4: FHIR Export - Server -->
-    <stage id="4" name="FHIR Export Backend" status="pending">
+    <stage id="4" name="FHIR Export Backend" status="completed">
         <task
             id="4.1"
             description="Create FHIR R4 type definitions"
@@ -588,7 +616,7 @@
     </stage>
 
     <!-- STAGE 5: FHIR Export - Client -->
-    <stage id="5" name="FHIR Export Frontend" status="pending">
+    <stage id="5" name="FHIR Export Frontend" status="completed">
         <task
             id="5.1"
             description="Create export hooks"
