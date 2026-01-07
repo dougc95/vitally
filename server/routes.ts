@@ -6,12 +6,15 @@ import { z } from "zod";
 import { Metric } from "@shared/schema";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 import { uploadMiddleware } from "./middleware/upload";
-import { createImportPreview, processImport } from "./services/import-processor";
-import { 
-    exportPatientFHIR, 
-    exportObservationsFHIR, 
-    exportGoalsFHIR, 
-    exportFullBundleFHIR 
+import {
+  createImportPreview,
+  processImport,
+} from "./services/import-processor";
+import {
+  exportPatientFHIR,
+  exportObservationsFHIR,
+  exportGoalsFHIR,
+  exportFullBundleFHIR,
 } from "./services/export-fhir";
 
 // Seed Data
@@ -294,94 +297,147 @@ export async function registerRoutes(
   });
 
   // --- IMPORT ROUTES ---
-  
-  app.post(api.import.preview.path, isAuthenticated, uploadMiddleware.single("file"), async (req, res) => {
-    try {
+
+  app.post(
+    api.import.preview.path,
+    isAuthenticated,
+    uploadMiddleware.single("file"),
+    async (req, res) => {
+      try {
         if (!req.file) {
-            return res.status(400).json({ message: "No file uploaded" });
+          return res.status(400).json({ message: "No file uploaded" });
         }
-        
+
         const preview = await createImportPreview(
-            req.file.buffer, 
-            req.file.mimetype, 
-            req.file.originalname, 
-            req.file.size
+          req.file.buffer,
+          req.file.mimetype,
+          req.file.originalname,
+          req.file.size
         );
         res.json(preview);
-    } catch (err: any) {
-        res.status(400).json({ message: err.message || "Failed to process file" });
+      } catch (err: any) {
+        res
+          .status(400)
+          .json({ message: err.message || "Failed to process file" });
+      }
+    }
+  );
+
+  app.post(api.import.confirm.path, isAuthenticated, async (req, res) => {
+    try {
+      const input = api.import.confirm.input.parse(req.body);
+      const patient = await getOrCreatePatient(req);
+
+      // Verify patient ownership is implicitly handled by getOrCreatePatient returning the user's patient
+      // But strict ownership check?
+      if (patient.userId !== req.user!.id) return res.status(403).send();
+
+      const result = await processImport(
+        patient.id,
+        input.rows,
+        input.mergeStrategy
+      );
+      res.json(result);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
     }
   });
 
-  app.post(api.import.confirm.path, isAuthenticated, async (req, res) => {
-      try {
-          const input = api.import.confirm.input.parse(req.body);
-          const patient = await getOrCreatePatient(req);
-          
-          // Verify patient ownership is implicitly handled by getOrCreatePatient returning the user's patient
-          // But strict ownership check?
-          if (patient.userId !== req.user!.id) return res.status(403).send();
-
-          const result = await processImport(patient.id, input.rows, input.mergeStrategy);
-          res.json(result);
-      } catch (err) {
-           if (err instanceof z.ZodError) {
-            return res.status(400).json({ message: err.errors[0].message });
-          }
-          throw err;
-      }
-  });
-
   app.get(api.import.template.path, isAuthenticated, async (req, res) => {
-      const csvContent = "Date,Metric,Value,Unit,Note\n2025-01-01,weight,75.5,kg,Morning weigh-in";
-      res.setHeader("Content-Type", "text/csv");
-      res.setHeader("Content-Disposition", 'attachment; filename="import_template.csv"');
-      res.send(csvContent);
+    const csvContent =
+      "Date,Metric,Value,Unit,Note\n2025-01-01,weight,75.5,kg,Morning weigh-in";
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="import_template.csv"'
+    );
+    res.send(csvContent);
   });
 
   // --- EXPORT ROUTES ---
 
   app.get(api.export.fhir.patient.path, isAuthenticated, async (req, res) => {
-     try {
-         const patient = await getOrCreatePatient(req);
-         // Verify ownership? getOrCreatePatient handles it.
-         const data = await exportPatientFHIR(patient.id);
-         res.json(data);
-     } catch (err: any) {
-         res.status(500).json({ message: err.message });
-     }
-  });
-
-  app.get(api.export.fhir.observations.path, isAuthenticated, async (req, res) => {
     try {
-        const patient = await getOrCreatePatient(req);
-        const { from, to } = req.query as { from?: string, to?: string };
-        const data = await exportObservationsFHIR(patient.id, from, to);
-        res.json(data);
+      const patient = await getOrCreatePatient(req);
+      // Verify ownership? getOrCreatePatient handles it.
+      const data = await exportPatientFHIR(patient.id);
+      res.json(data);
     } catch (err: any) {
-        res.status(500).json({ message: err.message });
+      res.status(500).json({ message: err.message });
     }
   });
 
+  app.get(
+    api.export.fhir.observations.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const patient = await getOrCreatePatient(req);
+        const { from, to } = req.query as { from?: string; to?: string };
+        const data = await exportObservationsFHIR(patient.id, from, to);
+        res.json(data);
+      } catch (err: any) {
+        res.status(500).json({ message: err.message });
+      }
+    }
+  );
+
   app.get(api.export.fhir.goals.path, isAuthenticated, async (req, res) => {
     try {
-        const patient = await getOrCreatePatient(req);
-        const { from, to } = req.query as { from?: string, to?: string };
-        const data = await exportGoalsFHIR(patient.id, from, to);
-        res.json(data);
+      const patient = await getOrCreatePatient(req);
+      const { from, to } = req.query as { from?: string; to?: string };
+      const data = await exportGoalsFHIR(patient.id, from, to);
+      res.json(data);
     } catch (err: any) {
-        res.status(500).json({ message: err.message });
+      res.status(500).json({ message: err.message });
     }
   });
 
   app.get(api.export.fhir.bundle.path, isAuthenticated, async (req, res) => {
     try {
-        const patient = await getOrCreatePatient(req);
-        const { from, to } = req.query as { from?: string, to?: string };
-        const data = await exportFullBundleFHIR(patient.id, from, to);
-        res.json(data);
+      const patient = await getOrCreatePatient(req);
+      const { from, to } = req.query as { from?: string; to?: string };
+      const data = await exportFullBundleFHIR(patient.id, from, to);
+      res.json(data);
     } catch (err: any) {
-        res.status(500).json({ message: err.message });
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // === CALCULATIONS ===
+  app.get(api.calculations.list.path, isAuthenticated, async (req, res) => {
+    try {
+      const patient = await getOrCreatePatient(req);
+      const userId = req.user!.id;
+      const calculations = await storage.getCalculations(patient.id, userId);
+      res.json(calculations);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post(api.calculations.create.path, isAuthenticated, async (req, res) => {
+    try {
+      const patient = await getOrCreatePatient(req);
+      const userId = req.user!.id;
+      const input = api.calculations.create.input.parse(req.body);
+      const calculation = await storage.createCalculation(
+        input,
+        patient.id,
+        userId
+      );
+      res.status(201).json(calculation);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join("."),
+        });
+      }
+      throw err;
     }
   });
 

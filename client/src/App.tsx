@@ -12,6 +12,7 @@ import Goals from "@/pages/Goals";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import ImportData from "@/pages/ImportData";
+import Calculator from "@/pages/Calculator";
 
 function Router() {
   return (
@@ -43,7 +44,12 @@ function Router() {
       </Route>
       <Route path="/import">
         <ProtectedRoute>
-            <ImportData />
+          <ImportData />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/calculator">
+        <ProtectedRoute>
+          <Calculator />
         </ProtectedRoute>
       </Route>
       <Route component={NotFound} />

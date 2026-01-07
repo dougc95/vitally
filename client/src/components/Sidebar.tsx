@@ -6,7 +6,8 @@ import {
   LineChart,
   PlusCircle,
   LogOut,
-  UploadCloud
+  UploadCloud,
+  Calculator,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -17,6 +18,7 @@ const navigation = [
   { name: "Add Metrics", href: "/measurements/new", icon: PlusCircle },
   { name: "Analytics", href: "/metrics", icon: LineChart },
   { name: "Goals", href: "/goals", icon: Target },
+  { name: "Calculator", href: "/calculator", icon: Calculator },
   { name: "Import Data", href: "/import", icon: UploadCloud },
 ];
 
@@ -58,7 +60,9 @@ export function Sidebar() {
 
         <nav className="space-y-1">
           {navigation.map((item) => {
-            const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+            const isActive =
+              location === item.href ||
+              (item.href !== "/" && location.startsWith(item.href));
             return (
               <Link
                 key={item.name}
@@ -70,10 +74,14 @@ export function Sidebar() {
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
-                <item.icon className={cn(
-                  "w-5 h-5 transition-colors",
-                  isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
-                )} />
+                <item.icon
+                  className={cn(
+                    "w-5 h-5 transition-colors",
+                    isActive
+                      ? "text-primary"
+                      : "text-muted-foreground group-hover:text-foreground"
+                  )}
+                />
                 {item.name}
               </Link>
             );
@@ -84,11 +92,17 @@ export function Sidebar() {
       <div className="mt-auto p-6 border-t border-border/50 space-y-3">
         <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200">
           <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
-            <span className="text-xs font-bold text-slate-600">{getInitials()}</span>
+            <span className="text-xs font-bold text-slate-600">
+              {getInitials()}
+            </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-slate-900 truncate">{getDisplayName()}</p>
-            <p className="text-xs text-slate-500 truncate">{user?.email || ""}</p>
+            <p className="text-sm font-semibold text-slate-900 truncate">
+              {getDisplayName()}
+            </p>
+            <p className="text-xs text-slate-500 truncate">
+              {user?.email || ""}
+            </p>
           </div>
         </div>
         <Button
@@ -113,17 +127,21 @@ export function MobileNav() {
     <div className="lg:hidden fixed bottom-0 left-0 right-0 border-t border-border bg-background/80 backdrop-blur-md pb-safe z-50">
       <div className="flex justify-around items-center p-2">
         {navigation.map((item) => {
-          const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+          const isActive =
+            location === item.href ||
+            (item.href !== "/" && location.startsWith(item.href));
           return (
-            <Link 
-              key={item.name} 
+            <Link
+              key={item.name}
               href={item.href}
               className={cn(
                 "flex flex-col items-center gap-1 p-2 rounded-lg transition-colors",
                 isActive ? "text-primary" : "text-muted-foreground"
               )}
             >
-              <item.icon className={cn("w-6 h-6", isActive && "fill-current/20")} />
+              <item.icon
+                className={cn("w-6 h-6", isActive && "fill-current/20")}
+              />
               <span className="text-[10px] font-medium">{item.name}</span>
             </Link>
           );

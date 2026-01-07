@@ -1,12 +1,14 @@
-import { z } from 'zod';
-import { 
-  createMeasurementSchema, 
-  upsertGoalSchema, 
+import { z } from "zod";
+import {
+  createMeasurementSchema,
+  upsertGoalSchema,
   metrics,
   patients,
   observations,
-  goals
-} from './schema';
+  goals,
+  calculations,
+  insertCalculationSchema,
+} from "./schema";
 
 // ============================================
 // SHARED ERROR SCHEMAS
@@ -30,8 +32,8 @@ export const errorSchemas = {
 export const api = {
   bootstrap: {
     get: {
-      method: 'GET' as const,
-      path: '/api/bootstrap',
+      method: "GET" as const,
+      path: "/api/bootstrap",
       responses: {
         200: z.object({
           patient: z.custom<typeof patients.$inferSelect>(),
@@ -42,8 +44,8 @@ export const api = {
   },
   measurements: {
     create: {
-      method: 'POST' as const,
-      path: '/api/measurements',
+      method: "POST" as const,
+      path: "/api/measurements",
       input: createMeasurementSchema,
       responses: {
         201: z.object({
@@ -54,46 +56,53 @@ export const api = {
       },
     },
     latest: {
-      method: 'GET' as const,
-      path: '/api/measurements/latest',
+      method: "GET" as const,
+      path: "/api/measurements/latest",
       input: z.object({ patientId: z.string().optional() }).optional(),
       responses: {
         200: z.custom<any>(), // Returns ObservationWithComponents or null
       },
     },
-    list: { // For history/charts
-      method: 'GET' as const,
-      path: '/api/measurements',
-      input: z.object({ 
-        from: z.string().optional(), 
-        to: z.string().optional() 
-      }).optional(),
+    list: {
+      // For history/charts
+      method: "GET" as const,
+      path: "/api/measurements",
+      input: z
+        .object({
+          from: z.string().optional(),
+          to: z.string().optional(),
+        })
+        .optional(),
       responses: {
         200: z.array(z.custom<any>()), // Array of ObservationWithComponents
       },
-    }
+    },
   },
   metrics: {
     timeseries: {
-      method: 'GET' as const,
-      path: '/api/metrics/:code/timeseries',
-      input: z.object({
-        from: z.string().optional(),
-        to: z.string().optional(),
-      }).optional(),
+      method: "GET" as const,
+      path: "/api/metrics/:code/timeseries",
+      input: z
+        .object({
+          from: z.string().optional(),
+          to: z.string().optional(),
+        })
+        .optional(),
       responses: {
-        200: z.array(z.object({
-          date: z.string(),
-          value: z.number(),
-        })),
+        200: z.array(
+          z.object({
+            date: z.string(),
+            value: z.number(),
+          })
+        ),
         404: errorSchemas.notFound,
       },
     },
   },
   goals: {
     upsert: {
-      method: 'PUT' as const,
-      path: '/api/goals',
+      method: "PUT" as const,
+      path: "/api/goals",
       input: upsertGoalSchema,
       responses: {
         200: z.custom<typeof goals.$inferSelect>(),
@@ -101,111 +110,140 @@ export const api = {
       },
     },
     get: {
-      method: 'GET' as const,
-      path: '/api/goals',
+      method: "GET" as const,
+      path: "/api/goals",
       input: z.object({ month: z.string() }), // YYYY-MM
       responses: {
         200: z.custom<any>(), // GoalWithTargets or null
       },
     },
     progress: {
-      method: 'GET' as const,
-      path: '/api/progress',
+      method: "GET" as const,
+      path: "/api/progress",
       input: z.object({ month: z.string() }), // YYYY-MM
       responses: {
-        200: z.array(z.object({
-          metricCode: z.string(),
-          metricName: z.string(),
-          currentValue: z.number().nullable(),
-          targetValue: z.number().nullable(),
-          unit: z.string(),
-          status: z.enum(["on-track", "off-track", "no-data", "no-target"]),
-          delta: z.number().nullable(),
-          direction: z.string().optional(),
-        })),
+        200: z.array(
+          z.object({
+            metricCode: z.string(),
+            metricName: z.string(),
+            currentValue: z.number().nullable(),
+            targetValue: z.number().nullable(),
+            unit: z.string(),
+            status: z.enum(["on-track", "off-track", "no-data", "no-target"]),
+            delta: z.number().nullable(),
+            direction: z.string().optional(),
+          })
+        ),
       },
     },
   },
   import: {
-      preview: {
-          method: 'POST' as const,
-          path: '/api/import/preview',
-          // multipart/form-data, body is not JSON validated here, handled by multer
-          responses: {
-              200: z.custom<any>(), // ImportPreview
-              400: errorSchemas.validation,
-          }
+    preview: {
+      method: "POST" as const,
+      path: "/api/import/preview",
+      // multipart/form-data, body is not JSON validated here, handled by multer
+      responses: {
+        200: z.custom<any>(), // ImportPreview
+        400: errorSchemas.validation,
       },
-      confirm: {
-          method: 'POST' as const,
-          path: '/api/import/confirm',
-          input: z.object({
-              rows: z.array(z.custom<any>()), // ImportRow[]
-              mergeStrategy: z.enum(['skip', 'overwrite']).default('skip')
-          }),
-          responses: {
-              200: z.custom<any>(), // ImportResult
-              400: errorSchemas.validation,
-          }
+    },
+    confirm: {
+      method: "POST" as const,
+      path: "/api/import/confirm",
+      input: z.object({
+        rows: z.array(z.custom<any>()), // ImportRow[]
+        mergeStrategy: z.enum(["skip", "overwrite"]).default("skip"),
+      }),
+      responses: {
+        200: z.custom<any>(), // ImportResult
+        400: errorSchemas.validation,
       },
-      template: {
-          method: 'GET' as const,
-          path: '/api/import/template',
-          responses: {
-              200: z.any(), // File download
-          }
-      }
+    },
+    template: {
+      method: "GET" as const,
+      path: "/api/import/template",
+      responses: {
+        200: z.any(), // File download
+      },
+    },
   },
   export: {
-      fhir: {
-          patient: {
-              method: 'GET' as const,
-              path: '/api/export/fhir/patient',
-              responses: {
-                  200: z.custom<any>(), // FHIRPatient
-              }
-          },
-          observations: {
-              method: 'GET' as const,
-              path: '/api/export/fhir/observations',
-              input: z.object({
-                  from: z.string().optional(),
-                  to: z.string().optional(),
-              }).optional(),
-              responses: {
-                  200: z.custom<any>(), // FHIRBundle
-              }
-          },
-          goals: {
-              method: 'GET' as const,
-              path: '/api/export/fhir/goals',
-              input: z.object({
-                  from: z.string().optional(),
-                  to: z.string().optional(),
-              }).optional(),
-              responses: {
-                  200: z.custom<any>(), // FHIRBundle
-              }
-          },
-          bundle: {
-              method: 'GET' as const,
-              path: '/api/export/fhir/bundle',
-              input: z.object({
-                  from: z.string().optional(),
-                  to: z.string().optional(),
-              }).optional(),
-              responses: {
-                  200: z.custom<any>(), // FHIRBundle
-              }
-          }
-      }
-  }
+    fhir: {
+      patient: {
+        method: "GET" as const,
+        path: "/api/export/fhir/patient",
+        responses: {
+          200: z.custom<any>(), // FHIRPatient
+        },
+      },
+      observations: {
+        method: "GET" as const,
+        path: "/api/export/fhir/observations",
+        input: z
+          .object({
+            from: z.string().optional(),
+            to: z.string().optional(),
+          })
+          .optional(),
+        responses: {
+          200: z.custom<any>(), // FHIRBundle
+        },
+      },
+      goals: {
+        method: "GET" as const,
+        path: "/api/export/fhir/goals",
+        input: z
+          .object({
+            from: z.string().optional(),
+            to: z.string().optional(),
+          })
+          .optional(),
+        responses: {
+          200: z.custom<any>(), // FHIRBundle
+        },
+      },
+      bundle: {
+        method: "GET" as const,
+        path: "/api/export/fhir/bundle",
+        input: z
+          .object({
+            from: z.string().optional(),
+            to: z.string().optional(),
+          })
+          .optional(),
+        responses: {
+          200: z.custom<any>(), // FHIRBundle
+        },
+      },
+    },
+  },
+  calculations: {
+    list: {
+      method: "GET" as const,
+      path: "/api/calculations",
+      responses: {
+        200: z.array(z.custom<typeof calculations.$inferSelect>()),
+      },
+    },
+    create: {
+      method: "POST" as const,
+      path: "/api/calculations",
+      input: insertCalculationSchema,
+      responses: {
+        201: z.custom<typeof calculations.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
+  },
 };
 
 // ============================================
 // HELPER
 // ============================================
-export function buildUrl(path: string, params?: Record<string, string | number>): string {
+export function buildUrl(
+  path: string,
+  params?: Record<string, string | number>
+): string {
   let url = path;
   if (params) {
     Object.entries(params).forEach(([key, value]) => {

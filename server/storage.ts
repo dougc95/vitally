@@ -6,12 +6,15 @@ import {
   observationComponents,
   goals,
   goalTargets,
+  calculations,
   users,
   type User,
   type Patient,
   type Metric,
   type Observation,
   type Goal,
+  type Calculation,
+  type InsertCalculation,
   type CreateMeasurementRequest,
   type UpsertGoalRequest,
   type ObservationWithComponents,
@@ -82,6 +85,14 @@ export interface IStorage {
     rows: ImportRow[],
     strategy: "skip" | "overwrite"
   ): Promise<ImportResult>;
+
+  // Calculations
+  getCalculations(patientId: number, userId: string): Promise<Calculation[]>;
+  createCalculation(
+    data: Omit<InsertCalculation, "patientId">,
+    patientId: number,
+    userId: string
+  ): Promise<Calculation>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -123,10 +134,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, id));
+    const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
 
@@ -411,84 +419,122 @@ export class DatabaseStorage implements IStorage {
     strategy: "skip" | "overwrite"
   ): Promise<ImportResult> {
     // Note: We don't check userId here because the caller (processor) is expected
-    // to have verified ownership or passed a verified patientId. 
+    // to have verified ownership or passed a verified patientId.
     // But to be safe, we could. However, this method only takes patientId.
     // Let's assume caller handles it for now, or we add userId param.
     // Given the signature, we'll proceed with patientId.
-    
+
     return await db.transaction(async (tx) => {
-        let imported = 0;
-        let skipped = 0;
-        let failed = 0; // We define failed but mostly we might throw or just log?
-        // Actually, schema validation happened before. Here we handle DB constraints.
+      let imported = 0;
+      let skipped = 0;
+      let failed = 0; // We define failed but mostly we might throw or just log?
+      // Actually, schema validation happened before. Here we handle DB constraints.
 
-        // Group by date to minimize observations locally
-        const byDate = new Map<string, ImportRow[]>();
-        for(const row of rows) {
-            if(!byDate.has(row.date)) byDate.set(row.date, []);
-            byDate.get(row.date)?.push(row);
+      // Group by date to minimize observations locally
+      const byDate = new Map<string, ImportRow[]>();
+      for (const row of rows) {
+        if (!byDate.has(row.date)) byDate.set(row.date, []);
+        byDate.get(row.date)?.push(row);
+      }
+
+      for (const [dateStr, dateRows] of Array.from(byDate.entries())) {
+        const dateObj = new Date(dateStr);
+
+        // Check for existing observation at this exact timestamp
+        // Note: dateStr from import-parser is ISO string. valid.
+        const existing = await tx.query.observations.findFirst({
+          where: and(
+            eq(observations.patientId, patientId),
+            eq(observations.effectiveAt, dateObj)
+          ),
+          with: { components: true },
+        });
+
+        let observationId = existing?.id;
+
+        if (!existing) {
+          // Create new
+          const [newObs] = await tx
+            .insert(observations)
+            .values({
+              patientId,
+              effectiveAt: dateObj,
+              status: "final",
+              category: "vital-signs",
+            })
+            .returning();
+          observationId = newObs.id;
         }
 
-        for (const [dateStr, dateRows] of Array.from(byDate.entries())) {
-            const dateObj = new Date(dateStr);
-            
-            // Check for existing observation at this exact timestamp
-            // Note: dateStr from import-parser is ISO string. valid.
-            const existing = await tx.query.observations.findFirst({
-                where: and(
-                    eq(observations.patientId, patientId),
-                    eq(observations.effectiveAt, dateObj)
-                ),
-                with: { components: true }
+        // Now handle components
+        for (const row of dateRows) {
+          const existingComp = existing?.components.find(
+            (c) => c.metricCode === row.metricCode
+          );
+
+          if (existingComp) {
+            if (strategy === "overwrite") {
+              await tx
+                .update(observationComponents)
+                .set({ value: row.value, unit: row.unit })
+                .where(eq(observationComponents.id, existingComp.id));
+              imported++;
+            } else {
+              skipped++;
+            }
+          } else {
+            // Insert new component
+            await tx.insert(observationComponents).values({
+              observationId: observationId!,
+              metricCode: row.metricCode,
+              value: row.value,
+              unit: row.unit,
             });
-
-            let observationId = existing?.id;
-
-            if (!existing) {
-                // Create new
-                const [newObs] = await tx.insert(observations).values({
-                    patientId,
-                    effectiveAt: dateObj,
-                    status: "final",
-                    category: "vital-signs"
-                }).returning();
-                observationId = newObs.id;
-            }
-
-            // Now handle components
-            for (const row of dateRows) {
-                const existingComp = existing?.components.find(c => c.metricCode === row.metricCode);
-                
-                if (existingComp) {
-                    if (strategy === "overwrite") {
-                        await tx.update(observationComponents)
-                            .set({ value: row.value, unit: row.unit })
-                            .where(eq(observationComponents.id, existingComp.id));
-                        imported++;
-                    } else {
-                        skipped++;
-                    }
-                } else {
-                    // Insert new component
-                     await tx.insert(observationComponents).values({
-                        observationId: observationId!,
-                        metricCode: row.metricCode,
-                        value: row.value,
-                        unit: row.unit
-                    });
-                    imported++;
-                }
-            }
+            imported++;
+          }
         }
+      }
 
-        return {
-            success: true,
-            importedCount: imported,
-            skippedCount: skipped,
-            failedCount: failed,
-            errors: []
-        };
+      return {
+        success: true,
+        importedCount: imported,
+        skippedCount: skipped,
+        failedCount: failed,
+        errors: [],
+      };
     });
+  }
+
+  // === CALCULATIONS ===
+  async getCalculations(
+    patientId: number,
+    userId: string
+  ): Promise<Calculation[]> {
+    await this.verifyOwnership(patientId, userId);
+
+    return await db
+      .select()
+      .from(calculations)
+      .where(eq(calculations.patientId, patientId))
+      .orderBy(desc(calculations.createdAt));
+  }
+
+  async createCalculation(
+    data: Omit<InsertCalculation, "patientId">,
+    patientId: number,
+    userId: string
+  ): Promise<Calculation> {
+    await this.verifyOwnership(patientId, userId);
+
+    const [calculation] = await db
+      .insert(calculations)
+      .values({
+        ...data,
+        patientId,
+      })
+      .returning();
+
+    return calculation;
   }
 }
 
