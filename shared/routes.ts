@@ -2,11 +2,15 @@ import { z } from "zod";
 import {
   createMeasurementSchema,
   upsertGoalSchema,
+  createHabitSchema,
+  updateHabitSchema,
+  toggleHabitEntrySchema,
   metrics,
   patients,
   observations,
   goals,
   calculations,
+  habits,
   insertCalculationSchema,
 } from "./schema";
 
@@ -232,6 +236,59 @@ export const api = {
       responses: {
         201: z.custom<typeof calculations.$inferSelect>(),
         400: errorSchemas.validation,
+      },
+    },
+  },
+  habits: {
+    list: {
+      method: "GET" as const,
+      path: "/api/habits",
+      responses: {
+        200: z.array(z.custom<any>()), // HabitWithEntries[]
+      },
+    },
+    get: {
+      method: "GET" as const,
+      path: "/api/habits/:id",
+      responses: {
+        200: z.custom<any>(), // HabitWithEntries
+        404: errorSchemas.notFound,
+      },
+    },
+    create: {
+      method: "POST" as const,
+      path: "/api/habits",
+      input: createHabitSchema,
+      responses: {
+        201: z.custom<typeof habits.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
+    update: {
+      method: "PUT" as const,
+      path: "/api/habits/:id",
+      input: updateHabitSchema,
+      responses: {
+        200: z.custom<typeof habits.$inferSelect>(),
+        400: errorSchemas.validation,
+        404: errorSchemas.notFound,
+      },
+    },
+    delete: {
+      method: "DELETE" as const,
+      path: "/api/habits/:id",
+      responses: {
+        204: z.undefined(),
+        404: errorSchemas.notFound,
+      },
+    },
+    toggleEntry: {
+      method: "POST" as const,
+      path: "/api/habits/:id/entries",
+      input: toggleHabitEntrySchema,
+      responses: {
+        200: z.object({ completed: z.boolean() }),
+        404: errorSchemas.notFound,
       },
     },
   },

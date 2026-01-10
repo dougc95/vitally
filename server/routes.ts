@@ -441,5 +441,130 @@ export async function registerRoutes(
     }
   });
 
+  // === HABITS ===
+  app.get(api.habits.list.path, isAuthenticated, async (req, res) => {
+    try {
+      const patient = await getOrCreatePatient(req);
+      const habits = await storage.getHabits(patient.id, req.user!.id);
+      res.json(habits);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get(api.habits.get.path, isAuthenticated, async (req, res) => {
+    try {
+      const habitId = parseInt(req.params.id, 10);
+      if (isNaN(habitId)) {
+        return res.status(400).json({ message: "Invalid habit ID" });
+      }
+      const habit = await storage.getHabit(habitId, req.user!.id);
+      if (!habit) {
+        return res.status(404).json({ message: "Habit not found" });
+      }
+      res.json(habit);
+    } catch (err: any) {
+      if (
+        err.message?.includes("not found") ||
+        err.message?.includes("Access denied")
+      ) {
+        return res.status(404).json({ message: "Habit not found" });
+      }
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post(api.habits.create.path, isAuthenticated, async (req, res) => {
+    try {
+      const input = api.habits.create.input.parse(req.body);
+      const patient = await getOrCreatePatient(req);
+      const habit = await storage.createHabit(input, patient.id, req.user!.id);
+      res.status(201).json(habit);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join("."),
+        });
+      }
+      throw err;
+    }
+  });
+
+  app.put(api.habits.update.path, isAuthenticated, async (req, res) => {
+    try {
+      const habitId = parseInt(req.params.id, 10);
+      if (isNaN(habitId)) {
+        return res.status(400).json({ message: "Invalid habit ID" });
+      }
+      const input = api.habits.update.input.parse(req.body);
+      const habit = await storage.updateHabit(habitId, input, req.user!.id);
+      res.json(habit);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join("."),
+        });
+      }
+      if (
+        err.message?.includes("not found") ||
+        err.message?.includes("Access denied")
+      ) {
+        return res.status(404).json({ message: "Habit not found" });
+      }
+      throw err;
+    }
+  });
+
+  app.delete(api.habits.delete.path, isAuthenticated, async (req, res) => {
+    try {
+      const habitId = parseInt(req.params.id, 10);
+      if (isNaN(habitId)) {
+        return res.status(400).json({ message: "Invalid habit ID" });
+      }
+      await storage.deleteHabit(habitId, req.user!.id);
+      res.status(204).send();
+    } catch (err: any) {
+      if (
+        err.message?.includes("not found") ||
+        err.message?.includes("Access denied")
+      ) {
+        return res.status(404).json({ message: "Habit not found" });
+      }
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post(api.habits.toggleEntry.path, isAuthenticated, async (req, res) => {
+    try {
+      const habitId = parseInt(req.params.id, 10);
+      if (isNaN(habitId)) {
+        return res.status(400).json({ message: "Invalid habit ID" });
+      }
+      const input = api.habits.toggleEntry.input.parse(req.body);
+      const result = await storage.toggleHabitEntry(
+        habitId,
+        input.date,
+        req.user!.id
+      );
+      res.json(result);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join("."),
+        });
+      }
+      if (
+        err.message?.includes("not found") ||
+        err.message?.includes("Access denied")
+      ) {
+        return res.status(404).json({ message: "Habit not found" });
+      }
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   return httpServer;
 }

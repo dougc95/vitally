@@ -13,6 +13,9 @@ import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import ImportData from "@/pages/ImportData";
 import Calculator from "@/pages/Calculator";
+import Habits from "@/pages/Habits";
+import CreateHabit from "@/pages/CreateHabit";
+import HabitDetail from "@/pages/HabitDetail";
 
 function Router() {
   return (
@@ -50,6 +53,21 @@ function Router() {
       <Route path="/calculator">
         <ProtectedRoute>
           <Calculator />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/habits">
+        <ProtectedRoute>
+          <Habits />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/habits/new">
+        <ProtectedRoute>
+          <CreateHabit />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/habits/:id">
+        <ProtectedRoute>
+          <HabitDetail />
         </ProtectedRoute>
       </Route>
       <Route component={NotFound} />

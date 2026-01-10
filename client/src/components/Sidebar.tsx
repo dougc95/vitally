@@ -8,6 +8,7 @@ import {
   LogOut,
   UploadCloud,
   Calculator,
+  CheckSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button";
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Add Metrics", href: "/measurements/new", icon: PlusCircle },
+  { name: "Habits", href: "/habits", icon: CheckSquare },
   { name: "Analytics", href: "/metrics", icon: LineChart },
   { name: "Goals", href: "/goals", icon: Target },
   { name: "Calculator", href: "/calculator", icon: Calculator },

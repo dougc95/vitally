@@ -263,10 +263,52 @@ storage.createMeasurement() - DatabaseStorage class
 - Fat: Fixed g/kg ratio (default 1.0)
 - Carbs: Remainder calories after protein and fat
 
+### Habit Tracking Feature
+
+**Location:** `/habits` route (protected)
+
+**Purpose:** Track daily habits with a GitHub-style contribution graph visualization.
+
+**Key Files:**
+
+- `client/src/pages/Habits.tsx` - Main habits list page with today's status
+- `client/src/pages/CreateHabit.tsx` - Form to create new habits
+- `client/src/pages/HabitDetail.tsx` - Individual habit view with calendar and stats
+- `client/src/components/habits/HabitCard.tsx` - Habit list item with toggle button
+- `client/src/components/habits/HabitCalendar.tsx` - Contribution graph visualization
+- `client/src/components/habits/HabitStats.tsx` - Stats overview (completion rate, total days)
+- `client/src/hooks/use-habits.ts` - React Query hooks for habit CRUD
+- `shared/schema.ts` - `habits` and `habitEntries` tables, Zod schemas
+- `server/storage.ts` - Habit storage methods
+- `server/routes.ts` - Habit API endpoints
+
+**Database Tables:**
+
+- `habits` - id, patientId, title, color (HSL), icon, startDate, timestamps
+- `habit_entries` - id, habitId, date, completed, note, timestamps
+
+**API Endpoints:**
+
+- `GET /api/habits` - List all habits with completed dates
+- `GET /api/habits/:id` - Get single habit with entries
+- `POST /api/habits` - Create new habit
+- `PUT /api/habits/:id` - Update habit
+- `DELETE /api/habits/:id` - Delete habit (cascades entries)
+- `POST /api/habits/:id/entries` - Toggle entry for a date
+
+**Features:**
+
+- Daily habit tracking with one-tap completion
+- Streak calculation
+- Contribution graph (7d, 1m, 90d, year views)
+- Log past dates retroactively
+- Color customization (6 preset HSL colors)
+- Completion rate and total days statistics
+
 ### Known Issues / Missing Features
 
 1. **Missing Auth File:** `server/replit_integrations/auth.ts` is referenced but not in repo
 2. **BMI Calculation:** Dashboard shows BMI card but formula not implemented
 3. **Trend Analysis:** Dashboard TODO at line 64 ("calculate real trend")
 4. **Metric Code Mismatch:** Progress endpoint may reference `body-fat` instead of `body_fat`
-5. **Database Migration:** Run `npm run db:push` to create `calculations` table after schema changes
+5. **Database Migration:** Run `npm run db:push` to create new tables after schema changes

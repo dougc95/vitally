@@ -8,6 +8,13 @@
       "when": 1767578286323,
       "tag": "0000_shallow_magdalene",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1768087718678,
+      "tag": "0001_rich_star_brand",
+      "breakpoints": true
     }
   ]
 }

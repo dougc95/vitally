@@ -94,6 +94,32 @@ export const goalTargets = pgTable("goal_targets", {
   tolerance: real("tolerance").default(0),
 });
 
+// === HABIT TRACKING TABLES ===
+
+export const habits = pgTable("habits", {
+  id: serial("id").primaryKey(),
+  patientId: integer("patient_id")
+    .references(() => patients.id)
+    .notNull(),
+  title: text("title").notNull(),
+  color: text("color").notNull(), // HSL color string
+  icon: text("icon"), // Optional icon identifier
+  startDate: date("start_date").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const habitEntries = pgTable("habit_entries", {
+  id: serial("id").primaryKey(),
+  habitId: integer("habit_id")
+    .references(() => habits.id, { onDelete: "cascade" })
+    .notNull(),
+  date: date("date").notNull(), // YYYY-MM-DD
+  completed: boolean("completed").default(true).notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const calculations = pgTable("calculations", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id")
@@ -166,6 +192,21 @@ export const goalTargetsRelations = relations(goalTargets, ({ one }) => ({
   }),
 }));
 
+export const habitsRelations = relations(habits, ({ one, many }) => ({
+  patient: one(patients, {
+    fields: [habits.patientId],
+    references: [patients.id],
+  }),
+  entries: many(habitEntries),
+}));
+
+export const habitEntriesRelations = relations(habitEntries, ({ one }) => ({
+  habit: one(habits, {
+    fields: [habitEntries.habitId],
+    references: [habits.id],
+  }),
+}));
+
 // === BASE SCHEMAS ===
 
 export const insertPatientSchema = createInsertSchema(patients).omit({
@@ -234,6 +275,19 @@ export const insertCalculationSchema = createInsertSchema(calculations).omit({
   patientId: true,
 });
 
+// Habit schemas
+export const insertHabitSchema = createInsertSchema(habits).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  patientId: true,
+});
+
+export const insertHabitEntrySchema = createInsertSchema(habitEntries).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertCalculation = z.infer<typeof insertCalculationSchema>;
 export type Calculation = typeof calculations.$inferSelect;
 
@@ -294,3 +348,47 @@ export type BootstrapResponse = {
   patient: Patient;
   metrics: Metric[];
 };
+
+// === HABIT TYPES ===
+
+export type Habit = typeof habits.$inferSelect;
+export type HabitEntry = typeof habitEntries.$inferSelect;
+export type InsertHabit = z.infer<typeof insertHabitSchema>;
+export type InsertHabitEntry = z.infer<typeof insertHabitEntrySchema>;
+
+export type HabitWithEntries = Habit & {
+  entries: HabitEntry[];
+  completedDates: string[]; // Derived from entries for convenience
+};
+
+// Habit API schemas
+export const createHabitSchema = z.object({
+  title: z.string().min(1, "Title is required").max(100),
+  color: z.string().min(1, "Color is required"),
+  icon: z.string().optional(),
+});
+
+export const updateHabitSchema = z.object({
+  title: z.string().min(1).max(100).optional(),
+  color: z.string().optional(),
+  icon: z.string().optional(),
+});
+
+export const toggleHabitEntrySchema = z.object({
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD format"),
+});
+
+export type CreateHabitRequest = z.infer<typeof createHabitSchema>;
+export type UpdateHabitRequest = z.infer<typeof updateHabitSchema>;
+export type ToggleHabitEntryRequest = z.infer<typeof toggleHabitEntrySchema>;
+
+export const HABIT_COLORS = [
+  { name: "Mint", value: "hsl(173 58% 39%)" },
+  { name: "Coral", value: "hsl(12 76% 61%)" },
+  { name: "Navy", value: "hsl(197 37% 24%)" },
+  { name: "Yellow", value: "hsl(43 74% 66%)" },
+  { name: "Purple", value: "hsl(262 83% 58%)" },
+  { name: "Pink", value: "hsl(340 75% 55%)" },
+] as const;

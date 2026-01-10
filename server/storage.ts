@@ -7,6 +7,8 @@ import {
   goals,
   goalTargets,
   calculations,
+  habits,
+  habitEntries,
   users,
   type User,
   type Patient,
@@ -19,6 +21,11 @@ import {
   type UpsertGoalRequest,
   type ObservationWithComponents,
   type GoalWithTargets,
+  type Habit,
+  type HabitEntry,
+  type HabitWithEntries,
+  type CreateHabitRequest,
+  type UpdateHabitRequest,
 } from "@shared/schema";
 import { ImportRow, ImportResult } from "@shared/types/import-export";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
@@ -93,6 +100,29 @@ export interface IStorage {
     patientId: number,
     userId: string
   ): Promise<Calculation>;
+
+  // Habits
+  getHabits(patientId: number, userId: string): Promise<HabitWithEntries[]>;
+  getHabit(
+    habitId: number,
+    userId: string
+  ): Promise<HabitWithEntries | undefined>;
+  createHabit(
+    data: CreateHabitRequest,
+    patientId: number,
+    userId: string
+  ): Promise<Habit>;
+  updateHabit(
+    habitId: number,
+    data: UpdateHabitRequest,
+    userId: string
+  ): Promise<Habit>;
+  deleteHabit(habitId: number, userId: string): Promise<void>;
+  toggleHabitEntry(
+    habitId: number,
+    date: string,
+    userId: string
+  ): Promise<{ completed: boolean }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -535,6 +565,147 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     return calculation;
+  }
+
+  // === HABITS ===
+  private async verifyHabitOwnership(
+    habitId: number,
+    userId: string
+  ): Promise<Habit> {
+    const [habit] = await db
+      .select()
+      .from(habits)
+      .where(eq(habits.id, habitId));
+    if (!habit) {
+      throw new UnauthorizedError("Habit not found");
+    }
+    // Verify the habit belongs to this user's patient
+    await this.verifyOwnership(habit.patientId, userId);
+    return habit;
+  }
+
+  async getHabits(
+    patientId: number,
+    userId: string
+  ): Promise<HabitWithEntries[]> {
+    await this.verifyOwnership(patientId, userId);
+
+    const habitsList = await db.query.habits.findMany({
+      where: eq(habits.patientId, patientId),
+      with: { entries: true },
+      orderBy: [desc(habits.createdAt)],
+    });
+
+    return habitsList.map((h) => ({
+      ...h,
+      completedDates: h.entries.filter((e) => e.completed).map((e) => e.date),
+    }));
+  }
+
+  async getHabit(
+    habitId: number,
+    userId: string
+  ): Promise<HabitWithEntries | undefined> {
+    await this.verifyHabitOwnership(habitId, userId);
+
+    const habit = await db.query.habits.findFirst({
+      where: eq(habits.id, habitId),
+      with: { entries: true },
+    });
+
+    if (!habit) return undefined;
+
+    return {
+      ...habit,
+      completedDates: habit.entries
+        .filter((e) => e.completed)
+        .map((e) => e.date),
+    };
+  }
+
+  async createHabit(
+    data: CreateHabitRequest,
+    patientId: number,
+    userId: string
+  ): Promise<Habit> {
+    await this.verifyOwnership(patientId, userId);
+
+    const today = new Date().toISOString().split("T")[0];
+    const [habit] = await db
+      .insert(habits)
+      .values({
+        patientId,
+        title: data.title,
+        color: data.color,
+        icon: data.icon,
+        startDate: today,
+      })
+      .returning();
+
+    return habit;
+  }
+
+  async updateHabit(
+    habitId: number,
+    data: UpdateHabitRequest,
+    userId: string
+  ): Promise<Habit> {
+    await this.verifyHabitOwnership(habitId, userId);
+
+    const [habit] = await db
+      .update(habits)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(habits.id, habitId))
+      .returning();
+
+    return habit;
+  }
+
+  async deleteHabit(habitId: number, userId: string): Promise<void> {
+    await this.verifyHabitOwnership(habitId, userId);
+
+    await db.delete(habits).where(eq(habits.id, habitId));
+  }
+
+  async toggleHabitEntry(
+    habitId: number,
+    date: string,
+    userId: string
+  ): Promise<{ completed: boolean }> {
+    await this.verifyHabitOwnership(habitId, userId);
+
+    // Check if entry exists for this date
+    const [existing] = await db
+      .select()
+      .from(habitEntries)
+      .where(
+        and(eq(habitEntries.habitId, habitId), eq(habitEntries.date, date))
+      );
+
+    if (existing) {
+      // Toggle: if completed, delete; if not completed, set to completed
+      if (existing.completed) {
+        await db.delete(habitEntries).where(eq(habitEntries.id, existing.id));
+        return { completed: false };
+      } else {
+        await db
+          .update(habitEntries)
+          .set({ completed: true })
+          .where(eq(habitEntries.id, existing.id));
+        return { completed: true };
+      }
+    } else {
+      // Create new entry as completed
+      await db.insert(habitEntries).values({
+        habitId,
+        date,
+        completed: true,
+      });
+      return { completed: true };
+    }
   }
 }
 
