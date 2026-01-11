@@ -11,51 +11,99 @@
   /* Medical Tech Palette - Clean, Slate, Teal/Blue */
   --background: 210 40% 98%;
   --foreground: 222 47% 11%;
-  
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --card-border: 214 32% 91%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
   --primary: 199 89% 48%; /* Medical Blue/Teal */
   --primary-foreground: 210 40% 98%;
-  
+
   --secondary: 210 40% 96%;
   --secondary-foreground: 222 47% 11%;
-  
+
   --muted: 210 40% 96%;
   --muted-foreground: 215 16% 47%;
-  
+
   --accent: 199 89% 96%;
   --accent-foreground: 199 89% 48%;
-  
+
   --destructive: 0 84% 60%;
   --destructive-foreground: 210 40% 98%;
 
   --border: 214 32% 91%;
   --input: 214 32% 91%;
   --ring: 199 89% 48%;
-  
+
   --radius: 0.75rem;
+
+  /* Sidebar */
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-primary: 199 89% 48%;
+  --sidebar-primary-foreground: 210 40% 98%;
+  --sidebar-accent: 210 40% 96%;
+  --sidebar-accent-foreground: 199 89% 48%;
+  --sidebar-border: 214 32% 91%;
+  --sidebar-ring: 199 89% 48%;
+
+  /* Charts */
+  --chart-1: 199 89% 48%;
+  --chart-2: 214 32% 91%;
+  --chart-3: 222 47% 11%;
+  --chart-4: 215 16% 47%;
+  --chart-5: 199 89% 96%;
 }
 
 .dark {
-  --background: 222 47% 11%;
+  --background: 222 47% 6%;
   --foreground: 210 40% 98%;
-  
+
+  --card: 222 47% 10%;
+  --card-foreground: 210 40% 98%;
+  --card-border: 217 33% 17%;
+
+  --popover: 222 47% 10%;
+  --popover-foreground: 210 40% 98%;
+
   --primary: 199 89% 48%;
   --primary-foreground: 222 47% 11%;
-  
-  --secondary: 217 33% 17%;
+
+  --secondary: 217 33% 14%;
   --secondary-foreground: 210 40% 98%;
-  
-  --muted: 217 33% 17%;
+
+  --muted: 217 33% 14%;
   --muted-foreground: 215 20% 65%;
-  
+
   --accent: 199 89% 15%;
   --accent-foreground: 199 89% 48%;
-  
+
   --destructive: 0 62% 30%;
   --destructive-foreground: 210 40% 98%;
-  
+
   --border: 217 33% 17%;
   --input: 217 33% 17%;
   --ring: 199 89% 48%;
+
+  /* Sidebar */
+  --sidebar: 222 47% 8%;
+  --sidebar-foreground: 210 40% 98%;
+  --sidebar-primary: 199 89% 48%;
+  --sidebar-primary-foreground: 210 40% 98%;
+  --sidebar-accent: 217 33% 14%;
+  --sidebar-accent-foreground: 199 89% 48%;
+  --sidebar-border: 217 33% 17%;
+  --sidebar-ring: 199 89% 48%;
+
+  /* Charts */
+  --chart-1: 199 89% 48%;
+  --chart-2: 217 33% 17%;
+  --chart-3: 199 89% 96%;
+  --chart-4: 215 20% 65%;
+  --chart-5: 199 89% 15%;
 }
 
 @layer base {
@@ -66,7 +114,7 @@
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
-    @apply font-bold tracking-tight text-slate-900 dark:text-slate-100;
+    @apply font-bold tracking-tight text-foreground;
   }
 }
 

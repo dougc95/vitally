@@ -61,15 +61,15 @@ export default function MetricsExplorer() {
           </Select>
         </div>
 
-        <div className="flex bg-slate-100 p-1 rounded-lg w-full sm:w-auto">
+        <div className="flex bg-muted p-1 rounded-lg w-full sm:w-auto">
           {["1m", "3m", "6m", "1y", "all"].map((range) => (
             <button
               key={range}
               onClick={() => setTimeRange(range as any)}
               className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-sm font-medium transition-all ${
                 timeRange === range 
-                  ? "bg-white text-primary shadow-sm" 
-                  : "text-slate-500 hover:text-slate-900"
+                  ? "bg-card text-primary shadow-sm" 
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {range.toUpperCase()}
@@ -92,18 +92,18 @@ export default function MetricsExplorer() {
                   <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
               <XAxis 
                 dataKey="date" 
                 tickFormatter={(date) => format(new Date(date), "MMM d")}
-                stroke="#94a3b8"
+                stroke="hsl(var(--muted-foreground))"
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
                 dy={10}
               />
               <YAxis 
-                stroke="#94a3b8"
+                stroke="hsl(var(--muted-foreground))"
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
@@ -112,12 +112,12 @@ export default function MetricsExplorer() {
               />
               <Tooltip 
                 contentStyle={{ 
-                  backgroundColor: '#fff', 
+                  backgroundColor: 'hsl(var(--card))', 
                   borderRadius: '12px', 
-                  border: '1px solid #e2e8f0',
+                  border: '1px solid hsl(var(--border))',
                   boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' 
                 }}
-                labelStyle={{ color: '#64748b', fontSize: '12px', marginBottom: '4px' }}
+                labelStyle={{ color: 'hsl(var(--muted-foreground))', fontSize: '12px', marginBottom: '4px' }}
                 labelFormatter={(date) => format(new Date(date), "MMM d, yyyy")}
               />
               <Area 
@@ -131,7 +131,7 @@ export default function MetricsExplorer() {
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-slate-400">
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground/60">
             <LineChart className="w-12 h-12 mb-2 opacity-20" />
             <p>No data available for this time range</p>
           </div>
@@ -163,11 +163,11 @@ export default function MetricsExplorer() {
 
 function StatsCard({ label, value, unit }: { label: string, value: string | number, unit?: string }) {
   return (
-    <div className="bg-white p-6 rounded-xl border border-border/50 shadow-sm">
-      <p className="text-sm font-medium text-slate-500 mb-1">{label}</p>
+    <div className="bg-card p-6 rounded-xl border border-border shadow-sm">
+      <p className="text-sm font-medium text-muted-foreground mb-1">{label}</p>
       <div className="flex items-baseline gap-1">
-        <span className="text-2xl font-bold text-slate-900 font-display">{value}</span>
-        <span className="text-xs text-slate-400 font-medium">{unit}</span>
+        <span className="text-2xl font-bold text-foreground font-display">{value}</span>
+        <span className="text-xs text-muted-foreground/60 font-medium">{unit}</span>
       </div>
     </div>
   );

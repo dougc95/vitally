@@ -35,24 +35,24 @@ export function MetricCard({
     // Context-aware coloring could be added here (is up good or bad?)
     // For now defaulting to standard financial-style colors
     switch (trend) {
-      case "up": return "text-emerald-600 bg-emerald-50";
-      case "down": return "text-rose-600 bg-rose-50";
-      default: return "text-slate-500 bg-slate-100";
+      case "up": return "text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/50";
+      case "down": return "text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-950/50";
+      default: return "text-muted-foreground bg-muted";
     }
   };
 
   return (
     <div className={cn(
-      "bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition-all duration-300",
+      "bg-card rounded-2xl p-6 shadow-sm border border-border/50 hover:shadow-md transition-all duration-300",
       className
     )}>
-      <h3 className="text-sm font-medium text-slate-500 mb-4">{title}</h3>
+      <h3 className="text-sm font-medium text-muted-foreground mb-4">{title}</h3>
       
       <div className="flex items-baseline gap-2">
-        <span className="text-3xl font-bold font-display text-slate-900 tracking-tight">
+        <span className="text-3xl font-bold font-display text-foreground tracking-tight">
           {value}
         </span>
-        <span className="text-sm font-medium text-slate-400">{unit}</span>
+        <span className="text-sm font-medium text-muted-foreground/60">{unit}</span>
       </div>
 
       {trend && (
@@ -61,7 +61,7 @@ export function MetricCard({
             {getTrendIcon()}
             {trendValue}
           </div>
-          <span className="text-xs text-slate-400">{trendLabel}</span>
+          <span className="text-xs text-muted-foreground/60">{trendLabel}</span>
         </div>
       )}
     </div>

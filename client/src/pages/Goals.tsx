@@ -32,20 +32,20 @@ export default function Goals() {
   const getStatusBadge = (status: string, delta: number | null) => {
     switch(status) {
       case "on-track":
-        return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 shadow-none border-emerald-200">On Track</Badge>;
+        return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 shadow-none border-emerald-200 dark:border-emerald-800">On Track</Badge>;
       case "off-track":
-        return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 shadow-none border-amber-200">Off Track</Badge>;
+        return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30 shadow-none border-amber-200 dark:border-amber-800">Off Track</Badge>;
       case "no-target":
-        return <Badge variant="outline" className="text-slate-500">No Target</Badge>;
+        return <Badge variant="outline" className="text-muted-foreground">No Target</Badge>;
       default:
-        return <Badge variant="outline" className="text-slate-400">No Data</Badge>;
+        return <Badge variant="outline" className="text-muted-foreground/60">No Data</Badge>;
     }
   };
 
   const getDeltaDisplay = (delta: number | null, unit: string) => {
     if (delta === null) return "-";
     const sign = delta > 0 ? "+" : "";
-    const color = delta === 0 ? "text-slate-400" : "text-slate-600";
+    const color = delta === 0 ? "text-muted-foreground/60" : "text-muted-foreground";
     return <span className={cn("font-mono text-xs", color)}>{sign}{delta.toFixed(1)} {unit}</span>;
   };
 
@@ -70,39 +70,39 @@ export default function Goals() {
         </Dialog>
       }
     >
-      <div className="bg-white rounded-2xl border border-border/50 shadow-sm overflow-hidden">
+      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
         <Table>
-          <TableHeader className="bg-slate-50/50">
+          <TableHeader className="bg-muted/50">
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[30%]">Metric</TableHead>
-              <TableHead>Target</TableHead>
-              <TableHead>Current</TableHead>
-              <TableHead>Gap</TableHead>
-              <TableHead className="text-right">Status</TableHead>
+              <TableHead className="w-[30%] text-muted-foreground">Metric</TableHead>
+              <TableHead className="text-muted-foreground">Target</TableHead>
+              <TableHead className="text-muted-foreground">Current</TableHead>
+              <TableHead className="text-muted-foreground">Gap</TableHead>
+              <TableHead className="text-right text-muted-foreground">Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {progress?.map((row) => (
-              <TableRow key={row.metricCode} className="hover:bg-slate-50/50">
-                <TableCell className="font-medium text-slate-900">
+              <TableRow key={row.metricCode} className="hover:bg-muted/50 border-border">
+                <TableCell className="font-medium text-foreground">
                   {row.metricName}
                 </TableCell>
                 <TableCell>
                   {row.targetValue !== null ? (
-                    <span className="font-medium font-mono text-slate-700">
-                      {row.targetValue} <span className="text-xs text-slate-400">{row.unit}</span>
+                    <span className="font-medium font-mono text-foreground/80">
+                      {row.targetValue} <span className="text-xs text-muted-foreground/60">{row.unit}</span>
                     </span>
                   ) : (
-                    <span className="text-slate-300">-</span>
+                    <span className="text-muted-foreground/30">-</span>
                   )}
                 </TableCell>
                 <TableCell>
                    {row.currentValue !== null ? (
-                    <span className="font-medium font-mono text-slate-900">
-                      {row.currentValue} <span className="text-xs text-slate-400">{row.unit}</span>
+                    <span className="font-medium font-mono text-foreground">
+                      {row.currentValue} <span className="text-xs text-muted-foreground/60">{row.unit}</span>
                     </span>
                   ) : (
-                    <span className="text-slate-300">-</span>
+                    <span className="text-muted-foreground/30">-</span>
                   )}
                 </TableCell>
                 <TableCell>
@@ -115,7 +115,7 @@ export default function Goals() {
             ))}
             {progress?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-slate-500">
+                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                   No goals set for this month. Click "Edit Targets" to get started.
                 </TableCell>
               </TableRow>
@@ -171,7 +171,7 @@ function EditGoalsDialog({ month, existingTargets, metrics, onClose }: any) {
       <form onSubmit={handleSubmit} className="space-y-4 py-4">
         {metrics.filter((m: any) => m.kind !== 'derived').map((metric: any) => (
           <div key={metric.code} className="grid grid-cols-3 gap-4 items-center">
-            <label htmlFor={`target-${metric.code}`} className="text-sm font-medium text-slate-700 col-span-1">
+            <label htmlFor={`target-${metric.code}`} className="text-sm font-medium text-foreground/80 col-span-1">
               {metric.displayName}
             </label>
             <div className="col-span-2 relative">

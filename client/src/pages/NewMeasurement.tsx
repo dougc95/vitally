@@ -149,9 +149,9 @@ export default function NewMeasurement() {
         <div className="grid gap-6 md:grid-cols-2">
           {Object.entries(metricsByKind).map(([kind, metrics]) => (
             <Card key={kind} className="border-border/60 shadow-sm overflow-hidden">
-              <div className="bg-slate-50/50 px-6 py-4 border-b border-border/50 flex items-center gap-2">
+              <div className="bg-muted/50 px-6 py-4 border-b border-border/50 flex items-center gap-2">
                 {kind === 'weight' ? <Weight className="w-4 h-4 text-primary" /> : <Ruler className="w-4 h-4 text-primary" />}
-                <h3 className="font-semibold text-slate-900 capitalize">{kind} Metrics</h3>
+                <h3 className="font-semibold text-foreground capitalize">{kind} Metrics</h3>
               </div>
               <CardContent className="p-6 space-y-4">
                 {metrics.map((metric) => (

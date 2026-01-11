@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { ThemePicker } from "./ThemePicker";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -94,21 +95,22 @@ export function Sidebar() {
       </div>
 
       <div className="mt-auto p-6 border-t border-border/50 space-y-3">
-        <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200">
-          <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
-            <span className="text-xs font-bold text-slate-600">
+        <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-muted/50 border border-border">
+          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+            <span className="text-xs font-bold text-muted-foreground">
               {getInitials()}
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-slate-900 truncate">
+            <p className="text-sm font-semibold text-foreground truncate">
               {getDisplayName()}
             </p>
-            <p className="text-xs text-slate-500 truncate">
+            <p className="text-xs text-muted-foreground truncate">
               {user?.email || ""}
             </p>
           </div>
         </div>
+        <ThemePicker />
         <Button
           variant="ghost"
           size="sm"

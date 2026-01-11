@@ -57,7 +57,7 @@ export default function Dashboard() {
         />
       </div>
 
-      <h2 className="text-xl font-display font-bold text-slate-900 mb-6">
+      <h2 className="text-xl font-display font-bold text-foreground mb-6">
         Latest Vitals
       </h2>
 
@@ -88,14 +88,14 @@ export default function Dashboard() {
           />
         </div>
       ) : (
-        <div className="bg-slate-50 border border-dashed border-slate-300 rounded-2xl p-12 text-center">
-          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
+        <div className="bg-muted/50 border border-dashed border-border rounded-2xl p-12 text-center">
+          <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto mb-4 text-muted-foreground">
             <History className="w-6 h-6" />
           </div>
-          <h3 className="text-lg font-medium text-slate-900 mb-2">
+          <h3 className="text-lg font-medium text-foreground mb-2">
             No Data Yet
           </h3>
-          <p className="text-slate-500 max-w-sm mx-auto mb-6">
+          <p className="text-muted-foreground max-w-sm mx-auto mb-6">
             Start tracking your health journey by logging your first
             measurement.
           </p>
@@ -105,15 +105,15 @@ export default function Dashboard() {
       {/* Recent History Preview */}
       <div className="mt-12">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-display font-bold text-slate-900">
+          <h2 className="text-xl font-display font-bold text-foreground">
             Recent History
           </h2>
           {/* Link to full history could go here */}
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-          <div className="p-6 border-b border-slate-100">
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-4 text-sm font-medium text-slate-500">
+        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+          <div className="p-6 border-b border-border/50">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-4 text-sm font-medium text-muted-foreground">
               <div>Date</div>
               <div>Weight</div>
               <div className="hidden sm:block">Body Fat</div>
@@ -121,28 +121,28 @@ export default function Dashboard() {
             </div>
           </div>
           {latest ? (
-            <div className="p-6 hover:bg-slate-50 transition-colors">
+            <div className="p-6 hover:bg-muted/50 transition-colors">
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-4 items-center text-sm">
-                <div className="font-medium text-slate-900">
+                <div className="font-medium text-foreground">
                   {format(new Date(latest.effectiveAt), "MMM d, yyyy")}
                 </div>
-                <div className="text-slate-600">
+                <div className="text-muted-foreground">
                   {weight?.value ?? "-"}{" "}
-                  <span className="text-xs text-slate-400">{weight?.unit}</span>
+                  <span className="text-xs text-muted-foreground/60">{weight?.unit}</span>
                 </div>
-                <div className="hidden sm:block text-slate-600">
+                <div className="hidden sm:block text-muted-foreground">
                   {bodyFat?.value ?? "-"}{" "}
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-muted-foreground/60">
                     {bodyFat?.unit}
                   </span>
                 </div>
-                <div className="text-right text-slate-400 truncate">
+                <div className="text-right text-muted-foreground/60 truncate">
                   {latest.note || "-"}
                 </div>
               </div>
             </div>
           ) : (
-            <div className="p-8 text-center text-slate-400 text-sm">
+            <div className="p-8 text-center text-muted-foreground text-sm">
               No history available
             </div>
           )}
