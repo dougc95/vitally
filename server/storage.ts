@@ -12,6 +12,8 @@ import {
   nutritionGoals,
   meals,
   mealItems,
+  userIngredients,
+  savedRecipes,
   users,
   type User,
   type Patient,
@@ -33,6 +35,10 @@ import {
   type MealWithItems,
   type CreateMealRequest,
   type UpdateNutritionGoalRequest,
+  type UserIngredient,
+  type SavedRecipe,
+  type AddIngredientRequest,
+  type SaveRecipeRequest,
 } from "@shared/schema";
 import { ImportRow, ImportResult } from "@shared/types/import-export";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
@@ -152,6 +158,29 @@ export interface IStorage {
     userId: string
   ): Promise<MealWithItems>;
   deleteMeal(mealId: number, userId: string): Promise<void>;
+
+  // Ingredients
+  getIngredients(patientId: number, userId: string): Promise<UserIngredient[]>;
+  addIngredient(
+    patientId: number,
+    data: AddIngredientRequest,
+    userId: string
+  ): Promise<UserIngredient>;
+  addIngredients(
+    patientId: number,
+    data: AddIngredientRequest[],
+    userId: string
+  ): Promise<UserIngredient[]>;
+  deleteIngredient(ingredientId: number, userId: string): Promise<void>;
+
+  // Recipes
+  getSavedRecipes(patientId: number, userId: string): Promise<SavedRecipe[]>;
+  saveRecipe(
+    patientId: number,
+    data: SaveRecipeRequest,
+    userId: string
+  ): Promise<SavedRecipe>;
+  deleteRecipe(recipeId: number, userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -858,6 +887,154 @@ export class DatabaseStorage implements IStorage {
     await this.verifyMealOwnership(mealId, userId);
 
     await db.delete(meals).where(eq(meals.id, mealId));
+  }
+
+  // === INGREDIENTS ===
+  async getIngredients(
+    patientId: number,
+    userId: string
+  ): Promise<UserIngredient[]> {
+    await this.verifyOwnership(patientId, userId);
+
+    return await db
+      .select()
+      .from(userIngredients)
+      .where(eq(userIngredients.patientId, patientId))
+      .orderBy(desc(userIngredients.createdAt));
+  }
+
+  async addIngredient(
+    patientId: number,
+    data: AddIngredientRequest,
+    userId: string
+  ): Promise<UserIngredient> {
+    await this.verifyOwnership(patientId, userId);
+
+    const [ingredient] = await db
+      .insert(userIngredients)
+      .values({
+        patientId,
+        name: data.name,
+        quantity: data.quantity ?? 1,
+        unit: data.unit ?? "unit",
+        category: data.category ?? "other",
+        expiresAt: data.expiresAt,
+      })
+      .returning();
+
+    return ingredient;
+  }
+
+  async addIngredients(
+    patientId: number,
+    data: AddIngredientRequest[],
+    userId: string
+  ): Promise<UserIngredient[]> {
+    await this.verifyOwnership(patientId, userId);
+
+    const ingredients: UserIngredient[] = [];
+    for (const item of data) {
+      const [ingredient] = await db
+        .insert(userIngredients)
+        .values({
+          patientId,
+          name: item.name,
+          quantity: item.quantity ?? 1,
+          unit: item.unit ?? "unit",
+          category: item.category ?? "other",
+          expiresAt: item.expiresAt,
+        })
+        .returning();
+      ingredients.push(ingredient);
+    }
+
+    return ingredients;
+  }
+
+  private async verifyIngredientOwnership(
+    ingredientId: number,
+    userId: string
+  ): Promise<UserIngredient> {
+    const [ingredient] = await db
+      .select()
+      .from(userIngredients)
+      .where(eq(userIngredients.id, ingredientId));
+    if (!ingredient) {
+      throw new UnauthorizedError("Ingredient not found");
+    }
+    await this.verifyOwnership(ingredient.patientId, userId);
+    return ingredient;
+  }
+
+  async deleteIngredient(ingredientId: number, userId: string): Promise<void> {
+    await this.verifyIngredientOwnership(ingredientId, userId);
+    await db
+      .delete(userIngredients)
+      .where(eq(userIngredients.id, ingredientId));
+  }
+
+  // === RECIPES ===
+  async getSavedRecipes(
+    patientId: number,
+    userId: string
+  ): Promise<SavedRecipe[]> {
+    await this.verifyOwnership(patientId, userId);
+
+    return await db
+      .select()
+      .from(savedRecipes)
+      .where(eq(savedRecipes.patientId, patientId))
+      .orderBy(desc(savedRecipes.createdAt));
+  }
+
+  async saveRecipe(
+    patientId: number,
+    data: SaveRecipeRequest,
+    userId: string
+  ): Promise<SavedRecipe> {
+    await this.verifyOwnership(patientId, userId);
+
+    const [recipe] = await db
+      .insert(savedRecipes)
+      .values({
+        patientId,
+        title: data.title,
+        description: data.description,
+        cuisineMode: data.cuisineMode,
+        ingredients: JSON.stringify(data.ingredients),
+        instructions: JSON.stringify(data.instructions),
+        prepTime: data.prepTime,
+        cookTime: data.cookTime,
+        servings: data.servings ?? 2,
+        difficulty: data.difficulty ?? "medium",
+        calories: data.calories,
+        protein: data.protein,
+        carbs: data.carbs,
+        fat: data.fat,
+      })
+      .returning();
+
+    return recipe;
+  }
+
+  private async verifyRecipeOwnership(
+    recipeId: number,
+    userId: string
+  ): Promise<SavedRecipe> {
+    const [recipe] = await db
+      .select()
+      .from(savedRecipes)
+      .where(eq(savedRecipes.id, recipeId));
+    if (!recipe) {
+      throw new UnauthorizedError("Recipe not found");
+    }
+    await this.verifyOwnership(recipe.patientId, userId);
+    return recipe;
+  }
+
+  async deleteRecipe(recipeId: number, userId: string): Promise<void> {
+    await this.verifyRecipeOwnership(recipeId, userId);
+    await db.delete(savedRecipes).where(eq(savedRecipes.id, recipeId));
   }
 }
 

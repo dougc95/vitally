@@ -19,6 +19,10 @@ import HabitDetail from "@/pages/HabitDetail";
 import Nutrition from "@/pages/Nutrition";
 import NutritionSettings from "@/pages/NutritionSettings";
 import LogMeal from "@/pages/LogMeal";
+import Ingredients from "@/pages/Ingredients";
+import ScanIngredients from "@/pages/ScanIngredients";
+import RecipeSuggestions from "@/pages/RecipeSuggestions";
+import SavedRecipes from "@/pages/SavedRecipes";
 
 function Router() {
   return (
@@ -86,6 +90,26 @@ function Router() {
       <Route path="/nutrition/settings">
         <ProtectedRoute>
           <NutritionSettings />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/nutrition/ingredients">
+        <ProtectedRoute>
+          <Ingredients />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/nutrition/ingredients/scan">
+        <ProtectedRoute>
+          <ScanIngredients />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/nutrition/recipes">
+        <ProtectedRoute>
+          <RecipeSuggestions />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/nutrition/recipes/saved">
+        <ProtectedRoute>
+          <SavedRecipes />
         </ProtectedRoute>
       </Route>
       <Route component={NotFound} />

@@ -702,5 +702,210 @@ export async function registerRoutes(
     }
   );
 
+  // === INGREDIENTS ROUTES ===
+
+  app.get(
+    api.nutrition.ingredients.list.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const ingredients = await storage.getIngredients(
+          req.patient!.id,
+          req.user!.id
+        );
+        res.json(ingredients);
+      } catch (err: any) {
+        res.status(500).json({ message: err.message });
+      }
+    }
+  );
+
+  app.post(
+    api.nutrition.ingredients.add.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const ingredient = await storage.addIngredient(
+          req.patient!.id,
+          req.body,
+          req.user!.id
+        );
+        res.status(201).json(ingredient);
+      } catch (err: any) {
+        res.status(400).json({ message: err.message });
+      }
+    }
+  );
+
+  app.post(
+    api.nutrition.ingredients.addBulk.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const { ingredients } = req.body;
+        const result = await storage.addIngredients(
+          req.patient!.id,
+          ingredients,
+          req.user!.id
+        );
+        res.status(201).json(result);
+      } catch (err: any) {
+        res.status(400).json({ message: err.message });
+      }
+    }
+  );
+
+  app.delete(
+    api.nutrition.ingredients.delete.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const ingredientId = parseInt(req.params.id);
+        await storage.deleteIngredient(ingredientId, req.user!.id);
+        res.status(204).send();
+      } catch (err: any) {
+        if (err.message.includes("not found")) {
+          res.status(404).json({ message: err.message });
+        } else {
+          res.status(500).json({ message: err.message });
+        }
+      }
+    }
+  );
+
+  app.post(
+    api.nutrition.ingredients.scan.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const { imageUrl, provider: requestedProvider } = req.body;
+        if (!imageUrl) {
+          return res.status(400).json({ message: "Image URL required" });
+        }
+
+        const { getAIProvider, getDefaultProvider } = await import(
+          "./services/ai-providers"
+        );
+
+        const providerType = requestedProvider || getDefaultProvider();
+        const provider = getAIProvider(providerType);
+
+        if (!provider.isConfigured()) {
+          return res.status(500).json({
+            message: `${providerType.toUpperCase()} API key not configured`,
+          });
+        }
+
+        const result = await provider.scanIngredients(imageUrl);
+        res.json(result);
+      } catch (err: any) {
+        console.error("Ingredient Scan Error:", err);
+        res
+          .status(500)
+          .json({ message: err.message || "Failed to scan ingredients" });
+      }
+    }
+  );
+
+  // === RECIPES ROUTES ===
+
+  app.post(
+    api.nutrition.recipes.suggest.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const {
+          cuisineMode,
+          provider: requestedProvider,
+          maxRecipes,
+          dietaryRestrictions,
+        } = req.body;
+
+        // Get user's current ingredients
+        const ingredients = await storage.getIngredients(
+          req.patient!.id,
+          req.user!.id
+        );
+
+        const { getAIProvider, getDefaultProvider } = await import(
+          "./services/ai-providers"
+        );
+
+        const providerType = requestedProvider || getDefaultProvider();
+        const provider = getAIProvider(providerType);
+
+        if (!provider.isConfigured()) {
+          return res.status(500).json({
+            message: `${providerType.toUpperCase()} API key not configured`,
+          });
+        }
+
+        const result = await provider.suggestRecipes(
+          ingredients.map((i) => i.name),
+          cuisineMode || "surprise",
+          maxRecipes || 3,
+          dietaryRestrictions
+        );
+        res.json(result);
+      } catch (err: any) {
+        console.error("Recipe Suggestion Error:", err);
+        res
+          .status(500)
+          .json({ message: err.message || "Failed to suggest recipes" });
+      }
+    }
+  );
+
+  app.get(
+    api.nutrition.recipes.saved.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const recipes = await storage.getSavedRecipes(
+          req.patient!.id,
+          req.user!.id
+        );
+        res.json(recipes);
+      } catch (err: any) {
+        res.status(500).json({ message: err.message });
+      }
+    }
+  );
+
+  app.post(
+    api.nutrition.recipes.save.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const recipe = await storage.saveRecipe(
+          req.patient!.id,
+          req.body,
+          req.user!.id
+        );
+        res.status(201).json(recipe);
+      } catch (err: any) {
+        res.status(400).json({ message: err.message });
+      }
+    }
+  );
+
+  app.delete(
+    api.nutrition.recipes.delete.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const recipeId = parseInt(req.params.id);
+        await storage.deleteRecipe(recipeId, req.user!.id);
+        res.status(204).send();
+      } catch (err: any) {
+        if (err.message.includes("not found")) {
+          res.status(404).json({ message: err.message });
+        } else {
+          res.status(500).json({ message: err.message });
+        }
+      }
+    }
+  );
+
   return httpServer;
 }

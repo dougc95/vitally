@@ -16,6 +16,11 @@ import {
   nutritionGoals,
   meals,
   insertCalculationSchema,
+  addIngredientSchema,
+  addIngredientsSchema,
+  scanIngredientsSchema,
+  suggestRecipesSchema,
+  saveRecipeSchema,
 } from "./schema";
 
 // ============================================
@@ -370,6 +375,114 @@ export const api = {
             ),
           }),
           500: errorSchemas.internal,
+        },
+      },
+    },
+    ingredients: {
+      list: {
+        method: "GET" as const,
+        path: "/api/nutrition/ingredients",
+        responses: {
+          200: z.array(z.custom<any>()),
+        },
+      },
+      add: {
+        method: "POST" as const,
+        path: "/api/nutrition/ingredients",
+        input: addIngredientSchema,
+        responses: {
+          201: z.custom<any>(),
+          400: errorSchemas.validation,
+        },
+      },
+      addBulk: {
+        method: "POST" as const,
+        path: "/api/nutrition/ingredients/bulk",
+        input: addIngredientsSchema,
+        responses: {
+          201: z.array(z.custom<any>()),
+          400: errorSchemas.validation,
+        },
+      },
+      delete: {
+        method: "DELETE" as const,
+        path: "/api/nutrition/ingredients/:id",
+        responses: {
+          204: z.undefined(),
+          404: errorSchemas.notFound,
+        },
+      },
+      scan: {
+        method: "POST" as const,
+        path: "/api/nutrition/ingredients/scan",
+        input: scanIngredientsSchema,
+        responses: {
+          200: z.object({
+            ingredients: z.array(
+              z.object({
+                name: z.string(),
+                quantity: z.number(),
+                unit: z.string(),
+                category: z.string(),
+                confidence: z.number(),
+              })
+            ),
+          }),
+          500: errorSchemas.internal,
+        },
+      },
+    },
+    recipes: {
+      suggest: {
+        method: "POST" as const,
+        path: "/api/nutrition/recipes/suggest",
+        input: suggestRecipesSchema,
+        responses: {
+          200: z.object({
+            recipes: z.array(
+              z.object({
+                title: z.string(),
+                description: z.string(),
+                ingredients: z.array(z.string()),
+                instructions: z.array(z.string()),
+                prepTime: z.number(),
+                cookTime: z.number(),
+                servings: z.number(),
+                difficulty: z.enum(["easy", "medium", "hard"]),
+                macros: z.object({
+                  calories: z.number(),
+                  protein: z.number(),
+                  carbs: z.number(),
+                  fat: z.number(),
+                }),
+              })
+            ),
+          }),
+          500: errorSchemas.internal,
+        },
+      },
+      saved: {
+        method: "GET" as const,
+        path: "/api/nutrition/recipes/saved",
+        responses: {
+          200: z.array(z.custom<any>()),
+        },
+      },
+      save: {
+        method: "POST" as const,
+        path: "/api/nutrition/recipes/save",
+        input: saveRecipeSchema,
+        responses: {
+          201: z.custom<any>(),
+          400: errorSchemas.validation,
+        },
+      },
+      delete: {
+        method: "DELETE" as const,
+        path: "/api/nutrition/recipes/:id",
+        responses: {
+          204: z.undefined(),
+          404: errorSchemas.notFound,
         },
       },
     },

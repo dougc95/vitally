@@ -9,7 +9,7 @@ import { MacroRing, MealCard } from "@/components/nutrition";
 import { PageLayout } from "@/components/PageLayout";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Loader2, Settings } from "lucide-react";
+import { Plus, Loader2, Settings, ChefHat, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Nutrition() {
@@ -162,6 +162,40 @@ export default function Nutrition() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Pantry & Recipe Ideas Section */}
+        <div className="grid md:grid-cols-2 gap-4">
+          <Link href="/nutrition/ingredients">
+            <div className="bg-card border border-border rounded-2xl p-5 hover:border-primary/50 transition-colors cursor-pointer group">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-secondary rounded-full flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                  <Package className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
+                <div>
+                  <h3 className="font-bold">My Pantry</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Manage your ingredients
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Link>
+          <Link href="/nutrition/recipes">
+            <div className="bg-card border border-border rounded-2xl p-5 hover:border-primary/50 transition-colors cursor-pointer group">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-secondary rounded-full flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                  <ChefHat className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
+                <div>
+                  <h3 className="font-bold">Recipe Ideas</h3>
+                  <p className="text-sm text-muted-foreground">
+                    AI-powered suggestions
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Link>
         </div>
 
         <div className="space-y-6">

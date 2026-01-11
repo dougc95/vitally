@@ -186,6 +186,86 @@ export const mealItems = pgTable("meal_items", {
   fat: integer("fat").notNull(),
 });
 
+// === INGREDIENTS & RECIPES TABLES ===
+
+export const ingredientCategoryEnum = z.enum([
+  "produce",
+  "protein",
+  "dairy",
+  "grains",
+  "pantry",
+  "spices",
+  "frozen",
+  "beverages",
+  "other",
+]);
+
+export const cuisineModeEnum = z.enum([
+  "surprise",
+  "asian",
+  "mediterranean",
+  "mexican",
+  "italian",
+  "american",
+  "indian",
+  "healthy",
+  "quick",
+  "keto",
+  "vegetarian",
+  "vegan",
+]);
+
+export const userIngredients = pgTable("user_ingredients", {
+  id: serial("id").primaryKey(),
+  patientId: integer("patient_id")
+    .references(() => patients.id)
+    .notNull(),
+  name: text("name").notNull(),
+  quantity: real("quantity").default(1),
+  unit: text("unit").default("unit"),
+  category: text("category").default("other"),
+  imageUrl: text("image_url"),
+  expiresAt: date("expires_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const savedRecipes = pgTable("saved_recipes", {
+  id: serial("id").primaryKey(),
+  patientId: integer("patient_id")
+    .references(() => patients.id)
+    .notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  cuisineMode: text("cuisine_mode"),
+  ingredients: text("ingredients").notNull(), // JSON string array
+  instructions: text("instructions").notNull(), // JSON string array
+  prepTime: integer("prep_time"), // minutes
+  cookTime: integer("cook_time"), // minutes
+  servings: integer("servings").default(2),
+  difficulty: text("difficulty").default("medium"),
+  calories: integer("calories"),
+  protein: integer("protein"),
+  carbs: integer("carbs"),
+  fat: integer("fat"),
+  imageUrl: text("image_url"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const recipeHistory = pgTable("recipe_history", {
+  id: serial("id").primaryKey(),
+  patientId: integer("patient_id")
+    .references(() => patients.id)
+    .notNull(),
+  recipeId: integer("recipe_id").references(() => savedRecipes.id, {
+    onDelete: "cascade",
+  }),
+  generatedRecipe: text("generated_recipe"), // JSON for non-saved recipes
+  cuisineMode: text("cuisine_mode"),
+  wasCooked: boolean("was_cooked").default(false),
+  rating: integer("rating"), // 1-5
+  generatedAt: timestamp("generated_at").defaultNow(),
+});
+
 // === RELATIONS ===
 
 export const observationsRelations = relations(
@@ -266,6 +346,38 @@ export const mealItemsRelations = relations(mealItems, ({ one }) => ({
   meal: one(meals, {
     fields: [mealItems.mealId],
     references: [meals.id],
+  }),
+}));
+
+export const userIngredientsRelations = relations(
+  userIngredients,
+  ({ one }) => ({
+    patient: one(patients, {
+      fields: [userIngredients.patientId],
+      references: [patients.id],
+    }),
+  })
+);
+
+export const savedRecipesRelations = relations(
+  savedRecipes,
+  ({ one, many }) => ({
+    patient: one(patients, {
+      fields: [savedRecipes.patientId],
+      references: [patients.id],
+    }),
+    history: many(recipeHistory),
+  })
+);
+
+export const recipeHistoryRelations = relations(recipeHistory, ({ one }) => ({
+  patient: one(patients, {
+    fields: [recipeHistory.patientId],
+    references: [patients.id],
+  }),
+  recipe: one(savedRecipes, {
+    fields: [recipeHistory.recipeId],
+    references: [savedRecipes.id],
   }),
 }));
 
@@ -539,3 +651,106 @@ export type UpdateNutritionGoalRequest = z.infer<
   typeof updateNutritionGoalSchema
 >;
 export type CreateMealSchemaRequest = z.infer<typeof createMealSchema>;
+
+// === INGREDIENTS & RECIPES TYPES & SCHEMAS ===
+
+export type UserIngredient = typeof userIngredients.$inferSelect;
+export type SavedRecipe = typeof savedRecipes.$inferSelect;
+export type RecipeHistory = typeof recipeHistory.$inferSelect;
+
+export type IngredientCategory = z.infer<typeof ingredientCategoryEnum>;
+export type CuisineMode = z.infer<typeof cuisineModeEnum>;
+
+export const insertIngredientSchema = createInsertSchema(userIngredients).omit({
+  id: true,
+  createdAt: true,
+  patientId: true,
+});
+
+export const insertSavedRecipeSchema = createInsertSchema(savedRecipes).omit({
+  id: true,
+  createdAt: true,
+  patientId: true,
+});
+
+export type InsertIngredient = z.infer<typeof insertIngredientSchema>;
+export type InsertSavedRecipe = z.infer<typeof insertSavedRecipeSchema>;
+
+export const addIngredientSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  quantity: z.number().optional().default(1),
+  unit: z.string().optional().default("unit"),
+  category: ingredientCategoryEnum.optional().default("other"),
+  expiresAt: z.string().optional(),
+});
+
+export const addIngredientsSchema = z.object({
+  ingredients: z.array(addIngredientSchema),
+});
+
+export const scanIngredientsSchema = z.object({
+  imageUrl: z.string(),
+  provider: z.enum(["openai", "gemini"]).optional(),
+});
+
+export const suggestRecipesSchema = z.object({
+  cuisineMode: cuisineModeEnum.optional().default("surprise"),
+  provider: z.enum(["openai", "gemini"]).optional(),
+  maxRecipes: z.number().optional().default(3),
+  dietaryRestrictions: z.array(z.string()).optional(),
+});
+
+export const saveRecipeSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  cuisineMode: z.string().optional(),
+  ingredients: z.array(z.string()),
+  instructions: z.array(z.string()),
+  prepTime: z.number().optional(),
+  cookTime: z.number().optional(),
+  servings: z.number().optional().default(2),
+  difficulty: z.enum(["easy", "medium", "hard"]).optional().default("medium"),
+  calories: z.number().optional(),
+  protein: z.number().optional(),
+  carbs: z.number().optional(),
+  fat: z.number().optional(),
+});
+
+export type AddIngredientRequest = z.infer<typeof addIngredientSchema>;
+export type AddIngredientsRequest = z.infer<typeof addIngredientsSchema>;
+export type ScanIngredientsRequest = z.infer<typeof scanIngredientsSchema>;
+export type SuggestRecipesRequest = z.infer<typeof suggestRecipesSchema>;
+export type SaveRecipeRequest = z.infer<typeof saveRecipeSchema>;
+
+export type ScannedIngredient = {
+  name: string;
+  quantity: number;
+  unit: string;
+  category: IngredientCategory;
+  confidence: number;
+};
+
+export type ScanIngredientsResponse = {
+  ingredients: ScannedIngredient[];
+};
+
+export type RecipeSuggestion = {
+  title: string;
+  description: string;
+  ingredients: string[];
+  instructions: string[];
+  prepTime: number;
+  cookTime: number;
+  servings: number;
+  difficulty: "easy" | "medium" | "hard";
+  macros: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+};
+
+export type SuggestRecipesResponse = {
+  recipes: RecipeSuggestion[];
+};
