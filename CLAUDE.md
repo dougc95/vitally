@@ -305,6 +305,57 @@ storage.createMeasurement() - DatabaseStorage class
 - Color customization (6 preset HSL colors)
 - Completion rate and total days statistics
 
+### Nutrition Tracking Feature
+
+**Location:** `/nutrition` route (protected)
+
+**Purpose:** Track daily meals and macronutrient intake with AI-powered food image analysis.
+
+**Key Files:**
+
+- `client/src/pages/Nutrition.tsx` - Main nutrition dashboard with macro rings
+- `client/src/pages/LogMeal.tsx` - 3-step meal logging flow (upload → analyze → review)
+- `client/src/components/nutrition/MacroRing.tsx` - Circular progress visualization
+- `client/src/components/nutrition/MealCard.tsx` - Meal display card with macros
+- `client/src/hooks/use-nutrition.ts` - React Query hooks for nutrition CRUD
+- `shared/schema.ts` - `nutritionGoals`, `meals`, `mealItems` tables
+- `server/storage.ts` - Nutrition storage methods
+- `server/routes.ts` - Nutrition API endpoints
+- `server/services/ai-providers/` - AI provider strategy pattern implementation
+  - `types.ts` - `AIImageAnalyzer` interface and shared types
+  - `openai-provider.ts` - OpenAI GPT-4o Vision implementation
+  - `gemini-provider.ts` - Google Gemini 1.5 Flash implementation
+  - `provider-factory.ts` - Factory for creating/switching providers
+
+**Database Tables:**
+
+- `nutrition_goals` - id, patientId (unique), calories, protein, carbs, fat, updatedAt
+- `meals` - id, patientId, imageUrl, mealType, date, createdAt
+- `meal_items` - id, mealId, name, quantity, unit, calories, protein, carbs, fat
+
+**API Endpoints:**
+
+- `GET /api/nutrition/goals` - Get patient's macro targets (creates defaults if none)
+- `POST /api/nutrition/goals` - Update macro targets
+- `GET /api/nutrition/meals?date=YYYY-MM-DD` - List meals for a date
+- `POST /api/nutrition/meals` - Create meal with items
+- `DELETE /api/nutrition/meals/:id` - Delete meal
+- `POST /api/nutrition/analyze-image` - AI-powered food analysis (supports `provider` param: "openai" | "gemini")
+
+**Features:**
+
+- Daily macro tracking with visual progress rings (calories, protein, carbs, fat)
+- AI-powered food image analysis with provider selection (OpenAI GPT-4o or Google Gemini)
+- Strategy pattern for AI providers - easily extensible for new providers
+- Meal type categorization (breakfast, lunch, dinner, snack)
+- Remaining calorie calculation
+- Per-meal macro breakdown
+
+**Environment Variables:**
+
+- `OPENAI_API_KEY` - Required for OpenAI image analysis
+- `GOOGLE_GEMINI_API_KEY` - Required for Google Gemini image analysis
+
 ### Known Issues / Missing Features
 
 1. **Missing Auth File:** `server/replit_integrations/auth.ts` is referenced but not in repo

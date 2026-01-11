@@ -16,6 +16,9 @@ import Calculator from "@/pages/Calculator";
 import Habits from "@/pages/Habits";
 import CreateHabit from "@/pages/CreateHabit";
 import HabitDetail from "@/pages/HabitDetail";
+import Nutrition from "@/pages/Nutrition";
+import NutritionSettings from "@/pages/NutritionSettings";
+import LogMeal from "@/pages/LogMeal";
 
 function Router() {
   return (
@@ -68,6 +71,21 @@ function Router() {
       <Route path="/habits/:id">
         <ProtectedRoute>
           <HabitDetail />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/nutrition">
+        <ProtectedRoute>
+          <Nutrition />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/nutrition/log">
+        <ProtectedRoute>
+          <LogMeal />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/nutrition/settings">
+        <ProtectedRoute>
+          <NutritionSettings />
         </ProtectedRoute>
       </Route>
       <Route component={NotFound} />

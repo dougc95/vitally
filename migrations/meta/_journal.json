@@ -15,6 +15,13 @@
       "when": 1768087718678,
       "tag": "0001_rich_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1768091493315,
+      "tag": "0002_curvy_angel",
+      "breakpoints": true
     }
   ]
 }

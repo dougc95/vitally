@@ -146,6 +146,46 @@ export const calculations = pgTable("calculations", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// === NUTRITION TRACKING TABLES ===
+
+export const nutritionGoals = pgTable("nutrition_goals", {
+  id: serial("id").primaryKey(),
+  patientId: integer("patient_id")
+    .references(() => patients.id)
+    .notNull()
+    .unique(),
+  calories: integer("calories").notNull().default(2000),
+  protein: integer("protein").notNull().default(150),
+  carbs: integer("carbs").notNull().default(200),
+  fat: integer("fat").notNull().default(65),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const meals = pgTable("meals", {
+  id: serial("id").primaryKey(),
+  patientId: integer("patient_id")
+    .references(() => patients.id)
+    .notNull(),
+  imageUrl: text("image_url"),
+  mealType: text("meal_type").notNull(), // breakfast, lunch, dinner, snack
+  date: date("date").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const mealItems = pgTable("meal_items", {
+  id: serial("id").primaryKey(),
+  mealId: integer("meal_id")
+    .references(() => meals.id, { onDelete: "cascade" })
+    .notNull(),
+  name: text("name").notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  unit: text("unit").notNull().default("serving"),
+  calories: integer("calories").notNull(),
+  protein: integer("protein").notNull(),
+  carbs: integer("carbs").notNull(),
+  fat: integer("fat").notNull(),
+});
+
 // === RELATIONS ===
 
 export const observationsRelations = relations(
@@ -204,6 +244,28 @@ export const habitEntriesRelations = relations(habitEntries, ({ one }) => ({
   habit: one(habits, {
     fields: [habitEntries.habitId],
     references: [habits.id],
+  }),
+}));
+
+export const nutritionGoalsRelations = relations(nutritionGoals, ({ one }) => ({
+  patient: one(patients, {
+    fields: [nutritionGoals.patientId],
+    references: [patients.id],
+  }),
+}));
+
+export const mealsRelations = relations(meals, ({ one, many }) => ({
+  patient: one(patients, {
+    fields: [meals.patientId],
+    references: [patients.id],
+  }),
+  items: many(mealItems),
+}));
+
+export const mealItemsRelations = relations(mealItems, ({ one }) => ({
+  meal: one(meals, {
+    fields: [mealItems.mealId],
+    references: [meals.id],
   }),
 }));
 
@@ -392,3 +454,88 @@ export const HABIT_COLORS = [
   { name: "Purple", value: "hsl(262 83% 58%)" },
   { name: "Pink", value: "hsl(340 75% 55%)" },
 ] as const;
+
+// === NUTRITION TYPES & SCHEMAS ===
+
+export type NutritionGoal = typeof nutritionGoals.$inferSelect;
+export type Meal = typeof meals.$inferSelect;
+export type MealItem = typeof mealItems.$inferSelect;
+
+export const insertNutritionGoalSchema = createInsertSchema(
+  nutritionGoals
+).omit({
+  id: true,
+  updatedAt: true,
+  patientId: true,
+});
+
+export const insertMealSchema = createInsertSchema(meals).omit({
+  id: true,
+  createdAt: true,
+  patientId: true,
+});
+
+export const insertMealItemSchema = createInsertSchema(mealItems).omit({
+  id: true,
+});
+
+export type InsertNutritionGoal = z.infer<typeof insertNutritionGoalSchema>;
+export type InsertMeal = z.infer<typeof insertMealSchema>;
+export type InsertMealItem = z.infer<typeof insertMealItemSchema>;
+
+export type MealWithItems = Meal & {
+  items: MealItem[];
+};
+
+export type CreateMealRequest = {
+  mealType: string;
+  date: string;
+  imageUrl?: string | null;
+  items: Omit<InsertMealItem, "mealId">[];
+};
+
+export type AnalyzeImageResponse = {
+  foods: {
+    name: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    confidence: number;
+    quantity: number;
+    unit: string;
+  }[];
+};
+
+export const mealTypeEnum = z.enum(["breakfast", "lunch", "dinner", "snack"]);
+
+export const updateNutritionGoalSchema = z.object({
+  calories: z.number().min(500).max(10000).optional(),
+  protein: z.number().min(0).max(500).optional(),
+  carbs: z.number().min(0).max(1000).optional(),
+  fat: z.number().min(0).max(500).optional(),
+});
+
+export const createMealSchema = z.object({
+  mealType: mealTypeEnum,
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD format"),
+  imageUrl: z.string().nullable().optional(),
+  items: z.array(
+    z.object({
+      name: z.string().min(1),
+      quantity: z.number().default(1),
+      unit: z.string().default("serving"),
+      calories: z.number(),
+      protein: z.number(),
+      carbs: z.number(),
+      fat: z.number(),
+    })
+  ),
+});
+
+export type UpdateNutritionGoalRequest = z.infer<
+  typeof updateNutritionGoalSchema
+>;
+export type CreateMealSchemaRequest = z.infer<typeof createMealSchema>;

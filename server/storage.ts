@@ -9,6 +9,9 @@ import {
   calculations,
   habits,
   habitEntries,
+  nutritionGoals,
+  meals,
+  mealItems,
   users,
   type User,
   type Patient,
@@ -26,6 +29,10 @@ import {
   type HabitWithEntries,
   type CreateHabitRequest,
   type UpdateHabitRequest,
+  type NutritionGoal,
+  type MealWithItems,
+  type CreateMealRequest,
+  type UpdateNutritionGoalRequest,
 } from "@shared/schema";
 import { ImportRow, ImportResult } from "@shared/types/import-export";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
@@ -123,6 +130,28 @@ export interface IStorage {
     date: string,
     userId: string
   ): Promise<{ completed: boolean }>;
+
+  // Nutrition
+  getNutritionGoal(
+    patientId: number,
+    userId: string
+  ): Promise<NutritionGoal | undefined>;
+  upsertNutritionGoal(
+    patientId: number,
+    data: UpdateNutritionGoalRequest,
+    userId: string
+  ): Promise<NutritionGoal>;
+  getMeals(
+    patientId: number,
+    date: string,
+    userId: string
+  ): Promise<MealWithItems[]>;
+  createMeal(
+    patientId: number,
+    data: CreateMealRequest,
+    userId: string
+  ): Promise<MealWithItems>;
+  deleteMeal(mealId: number, userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -706,6 +735,129 @@ export class DatabaseStorage implements IStorage {
       });
       return { completed: true };
     }
+  }
+
+  // === NUTRITION ===
+  async getNutritionGoal(
+    patientId: number,
+    userId: string
+  ): Promise<NutritionGoal | undefined> {
+    await this.verifyOwnership(patientId, userId);
+
+    const [goal] = await db
+      .select()
+      .from(nutritionGoals)
+      .where(eq(nutritionGoals.patientId, patientId));
+
+    return goal;
+  }
+
+  async upsertNutritionGoal(
+    patientId: number,
+    data: UpdateNutritionGoalRequest,
+    userId: string
+  ): Promise<NutritionGoal> {
+    await this.verifyOwnership(patientId, userId);
+
+    const existing = await this.getNutritionGoal(patientId, userId);
+
+    if (existing) {
+      const [updated] = await db
+        .update(nutritionGoals)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(nutritionGoals.patientId, patientId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(nutritionGoals)
+        .values({
+          patientId,
+          calories: data.calories ?? 2000,
+          protein: data.protein ?? 150,
+          carbs: data.carbs ?? 200,
+          fat: data.fat ?? 65,
+        })
+        .returning();
+      return created;
+    }
+  }
+
+  async getMeals(
+    patientId: number,
+    date: string,
+    userId: string
+  ): Promise<MealWithItems[]> {
+    await this.verifyOwnership(patientId, userId);
+
+    const mealsList = await db.query.meals.findMany({
+      where: and(eq(meals.patientId, patientId), eq(meals.date, date)),
+      with: { items: true },
+      orderBy: [desc(meals.createdAt)],
+    });
+
+    return mealsList;
+  }
+
+  async createMeal(
+    patientId: number,
+    data: CreateMealRequest,
+    userId: string
+  ): Promise<MealWithItems> {
+    await this.verifyOwnership(patientId, userId);
+
+    return await db.transaction(async (tx) => {
+      const [meal] = await tx
+        .insert(meals)
+        .values({
+          patientId,
+          mealType: data.mealType,
+          date: data.date,
+          imageUrl: data.imageUrl,
+        })
+        .returning();
+
+      const insertedItems = [];
+      for (const item of data.items) {
+        const [insertedItem] = await tx
+          .insert(mealItems)
+          .values({
+            mealId: meal.id,
+            name: item.name,
+            quantity: item.quantity ?? 1,
+            unit: item.unit ?? "serving",
+            calories: item.calories,
+            protein: item.protein,
+            carbs: item.carbs,
+            fat: item.fat,
+          })
+          .returning();
+        insertedItems.push(insertedItem);
+      }
+
+      return { ...meal, items: insertedItems };
+    });
+  }
+
+  private async verifyMealOwnership(
+    mealId: number,
+    userId: string
+  ): Promise<typeof meals.$inferSelect> {
+    const [meal] = await db.select().from(meals).where(eq(meals.id, mealId));
+    if (!meal) {
+      throw new UnauthorizedError("Meal not found");
+    }
+    await this.verifyOwnership(meal.patientId, userId);
+    return meal;
+  }
+
+  async deleteMeal(mealId: number, userId: string): Promise<void> {
+    await this.verifyMealOwnership(mealId, userId);
+
+    await db.delete(meals).where(eq(meals.id, mealId));
   }
 }
 

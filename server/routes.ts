@@ -566,5 +566,141 @@ export async function registerRoutes(
     }
   });
 
+  // === NUTRITION ===
+  app.get(api.nutrition.goals.get.path, isAuthenticated, async (req, res) => {
+    try {
+      const patient = await getOrCreatePatient(req);
+      let goal = await storage.getNutritionGoal(patient.id, req.user!.id);
+
+      if (!goal) {
+        // Create default goals
+        goal = await storage.upsertNutritionGoal(
+          patient.id,
+          { calories: 2000, protein: 150, carbs: 200, fat: 65 },
+          req.user!.id
+        );
+      }
+
+      res.json(goal);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post(
+    api.nutrition.goals.update.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const input = api.nutrition.goals.update.input.parse(req.body);
+        const patient = await getOrCreatePatient(req);
+        const goal = await storage.upsertNutritionGoal(
+          patient.id,
+          input,
+          req.user!.id
+        );
+        res.json(goal);
+      } catch (err: any) {
+        if (err instanceof z.ZodError) {
+          return res.status(400).json({
+            message: err.errors[0].message,
+            field: err.errors[0].path.join("."),
+          });
+        }
+        res.status(500).json({ message: err.message });
+      }
+    }
+  );
+
+  app.get(api.nutrition.meals.list.path, isAuthenticated, async (req, res) => {
+    try {
+      const patient = await getOrCreatePatient(req);
+      const date =
+        (req.query.date as string) || new Date().toISOString().split("T")[0];
+      const mealsList = await storage.getMeals(patient.id, date, req.user!.id);
+      res.json(mealsList);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post(
+    api.nutrition.meals.create.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const input = api.nutrition.meals.create.input.parse(req.body);
+        const patient = await getOrCreatePatient(req);
+        const meal = await storage.createMeal(patient.id, input, req.user!.id);
+        res.status(201).json(meal);
+      } catch (err: any) {
+        if (err instanceof z.ZodError) {
+          return res.status(400).json({
+            message: err.errors[0].message,
+            field: err.errors[0].path.join("."),
+          });
+        }
+        res.status(500).json({ message: err.message });
+      }
+    }
+  );
+
+  app.delete(
+    api.nutrition.meals.delete.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const mealId = parseInt(req.params.id, 10);
+        if (isNaN(mealId)) {
+          return res.status(400).json({ message: "Invalid meal ID" });
+        }
+        await storage.deleteMeal(mealId, req.user!.id);
+        res.status(204).send();
+      } catch (err: any) {
+        if (
+          err.message?.includes("not found") ||
+          err.message?.includes("Access denied")
+        ) {
+          return res.status(404).json({ message: "Meal not found" });
+        }
+        res.status(500).json({ message: err.message });
+      }
+    }
+  );
+
+  app.post(
+    api.nutrition.analysis.analyze.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const { imageUrl, provider: requestedProvider } = req.body;
+        if (!imageUrl) {
+          return res.status(400).json({ message: "Image URL required" });
+        }
+
+        const { getAIProvider, getDefaultProvider } = await import(
+          "./services/ai-providers"
+        );
+
+        const providerType = requestedProvider || getDefaultProvider();
+        const provider = getAIProvider(providerType);
+
+        if (!provider.isConfigured()) {
+          return res.status(500).json({
+            message: `${providerType.toUpperCase()} API key not configured`,
+          });
+        }
+
+        const result = await provider.analyzeImage(imageUrl);
+        res.json(result);
+      } catch (err: any) {
+        console.error("AI Analysis Error:", err);
+        res
+          .status(500)
+          .json({ message: err.message || "Failed to analyze image" });
+      }
+    }
+  );
+
   return httpServer;
 }

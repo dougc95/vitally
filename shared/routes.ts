@@ -5,12 +5,16 @@ import {
   createHabitSchema,
   updateHabitSchema,
   toggleHabitEntrySchema,
+  updateNutritionGoalSchema,
+  createMealSchema,
   metrics,
   patients,
   observations,
   goals,
   calculations,
   habits,
+  nutritionGoals,
+  meals,
   insertCalculationSchema,
 } from "./schema";
 
@@ -289,6 +293,84 @@ export const api = {
       responses: {
         200: z.object({ completed: z.boolean() }),
         404: errorSchemas.notFound,
+      },
+    },
+  },
+  nutrition: {
+    goals: {
+      get: {
+        method: "GET" as const,
+        path: "/api/nutrition/goals",
+        responses: {
+          200: z.custom<typeof nutritionGoals.$inferSelect>(),
+        },
+      },
+      update: {
+        method: "POST" as const,
+        path: "/api/nutrition/goals",
+        input: updateNutritionGoalSchema,
+        responses: {
+          200: z.custom<typeof nutritionGoals.$inferSelect>(),
+          400: errorSchemas.validation,
+        },
+      },
+    },
+    meals: {
+      list: {
+        method: "GET" as const,
+        path: "/api/nutrition/meals",
+        input: z
+          .object({
+            date: z.string().optional(),
+          })
+          .optional(),
+        responses: {
+          200: z.array(z.custom<any>()), // MealWithItems[]
+        },
+      },
+      create: {
+        method: "POST" as const,
+        path: "/api/nutrition/meals",
+        input: createMealSchema,
+        responses: {
+          201: z.custom<any>(), // MealWithItems
+          400: errorSchemas.validation,
+        },
+      },
+      delete: {
+        method: "DELETE" as const,
+        path: "/api/nutrition/meals/:id",
+        responses: {
+          204: z.undefined(),
+          404: errorSchemas.notFound,
+        },
+      },
+    },
+    analysis: {
+      analyze: {
+        method: "POST" as const,
+        path: "/api/nutrition/analyze-image",
+        input: z.object({
+          imageUrl: z.string(),
+          provider: z.enum(["openai", "gemini"]).optional(),
+        }),
+        responses: {
+          200: z.object({
+            foods: z.array(
+              z.object({
+                name: z.string(),
+                calories: z.number(),
+                protein: z.number(),
+                carbs: z.number(),
+                fat: z.number(),
+                confidence: z.number(),
+                quantity: z.number(),
+                unit: z.string(),
+              })
+            ),
+          }),
+          500: errorSchemas.internal,
+        },
       },
     },
   },
