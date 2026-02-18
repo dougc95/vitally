@@ -20,6 +20,7 @@ vi.mock("./auth", () => ({
 vi.mock("./storage", () => ({
     storage: {
         getPatientByUserId: vi.fn(),
+        getOrCreatePatient: vi.fn(),
         getUser: vi.fn(),
         seedMetrics: vi.fn(),
         // Add other methods needed by routes or auth
@@ -87,7 +88,7 @@ describe("API Endpoints", () => {
 
     describe("GET /api/export/fhir/patient", () => {
         it("should return patient resource", async () => {
-            (storage.getPatientByUserId as any).mockResolvedValue({ id: 1 });
+            (storage.getOrCreatePatient as any).mockResolvedValue({ id: 1 });
             (exportPatientFHIR as any).mockResolvedValue({ resourceType: "Patient", id: "1" });
 
             const res = await request(app).get("/api/export/fhir/patient");

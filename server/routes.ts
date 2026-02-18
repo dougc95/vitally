@@ -114,7 +114,7 @@ async function seedMetrics() {
 
 export async function registerRoutes(
   httpServer: Server,
-  app: Express
+  app: Express,
 ): Promise<Server> {
   // Setup Auth FIRST
   await setupAuth(app);
@@ -126,15 +126,11 @@ export async function registerRoutes(
   // Helper to get or create patient for logged in user
   async function getOrCreatePatient(req: any) {
     const userId = req.user.id;
-    let patient = await storage.getPatientByUserId(userId);
-    if (!patient) {
-      patient = await storage.createPatient({
-        userId,
-        displayName: req.user.firstName || req.user.email || "User",
-        heightCm: 175, // Default
-      });
-    }
-    return patient;
+    return await storage.getOrCreatePatient({
+      userId,
+      displayName: req.user.firstName || req.user.email || "User",
+      heightCm: 175, // Default
+    });
   }
 
   // --- API ROUTES ---
@@ -165,7 +161,7 @@ export async function registerRoutes(
       const result = await storage.createMeasurement(
         input,
         patient.id,
-        req.user!.id
+        req.user!.id,
       );
       res.status(201).json(result);
     } catch (err) {
@@ -192,7 +188,7 @@ export async function registerRoutes(
       patient.id,
       from,
       to,
-      req.user!.id
+      req.user!.id,
     );
     res.json(list);
   });
@@ -210,7 +206,7 @@ export async function registerRoutes(
       code,
       from,
       to,
-      req.user!.id
+      req.user!.id,
     );
     res.json(data);
   });
@@ -244,8 +240,8 @@ export async function registerRoutes(
     if (!month) return res.status(400).json({ message: "Month is required" });
 
     const monthStart = `${month}-01`;
-    const d = new Date(month);
-    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const [year, mon] = month.split("-").map(Number);
+    const lastDay = new Date(year, mon, 0).getDate();
     const monthEnd = `${month}-${lastDay}`;
 
     const goal = await storage.getGoal(patient.id, month, req.user!.id);
@@ -258,7 +254,7 @@ export async function registerRoutes(
         target.metricCode,
         monthStart,
         monthEnd,
-        req.user!.id
+        req.user!.id,
       );
 
       let status: "on-track" | "off-track" | "no-data" | "no-target" =
@@ -284,7 +280,7 @@ export async function registerRoutes(
       report.push({
         metricCode: target.metricCode,
         metricName: target.metric.displayName,
-        currentValue: currentVal || null,
+        currentValue: currentVal ?? null,
         targetValue: target.targetValue,
         unit: target.unit,
         status,
@@ -312,7 +308,7 @@ export async function registerRoutes(
           req.file.buffer,
           req.file.mimetype,
           req.file.originalname,
-          req.file.size
+          req.file.size,
         );
         res.json(preview);
       } catch (err: any) {
@@ -320,7 +316,7 @@ export async function registerRoutes(
           .status(400)
           .json({ message: err.message || "Failed to process file" });
       }
-    }
+    },
   );
 
   app.post(api.import.confirm.path, isAuthenticated, async (req, res) => {
@@ -330,12 +326,10 @@ export async function registerRoutes(
 
       // Verify patient ownership is implicitly handled by getOrCreatePatient returning the user's patient
       // But strict ownership check?
-      if (patient.userId !== req.user!.id) return res.status(403).send();
-
       const result = await processImport(
         patient.id,
         input.rows,
-        input.mergeStrategy
+        input.mergeStrategy,
       );
       res.json(result);
     } catch (err) {
@@ -352,7 +346,7 @@ export async function registerRoutes(
     res.setHeader("Content-Type", "text/csv");
     res.setHeader(
       "Content-Disposition",
-      'attachment; filename="import_template.csv"'
+      'attachment; filename="import_template.csv"',
     );
     res.send(csvContent);
   });
@@ -382,7 +376,7 @@ export async function registerRoutes(
       } catch (err: any) {
         res.status(500).json({ message: err.message });
       }
-    }
+    },
   );
 
   app.get(api.export.fhir.goals.path, isAuthenticated, async (req, res) => {
@@ -427,7 +421,7 @@ export async function registerRoutes(
       const calculation = await storage.createCalculation(
         input,
         patient.id,
-        userId
+        userId,
       );
       res.status(201).json(calculation);
     } catch (err) {
@@ -546,7 +540,7 @@ export async function registerRoutes(
       const result = await storage.toggleHabitEntry(
         habitId,
         input.date,
-        req.user!.id
+        req.user!.id,
       );
       res.json(result);
     } catch (err: any) {
@@ -577,7 +571,7 @@ export async function registerRoutes(
         goal = await storage.upsertNutritionGoal(
           patient.id,
           { calories: 2000, protein: 150, carbs: 200, fat: 65 },
-          req.user!.id
+          req.user!.id,
         );
       }
 
@@ -597,7 +591,7 @@ export async function registerRoutes(
         const goal = await storage.upsertNutritionGoal(
           patient.id,
           input,
-          req.user!.id
+          req.user!.id,
         );
         res.json(goal);
       } catch (err: any) {
@@ -609,7 +603,7 @@ export async function registerRoutes(
         }
         res.status(500).json({ message: err.message });
       }
-    }
+    },
   );
 
   app.get(api.nutrition.meals.list.path, isAuthenticated, async (req, res) => {
@@ -642,7 +636,7 @@ export async function registerRoutes(
         }
         res.status(500).json({ message: err.message });
       }
-    }
+    },
   );
 
   app.delete(
@@ -665,7 +659,7 @@ export async function registerRoutes(
         }
         res.status(500).json({ message: err.message });
       }
-    }
+    },
   );
 
   app.post(
@@ -678,9 +672,8 @@ export async function registerRoutes(
           return res.status(400).json({ message: "Image URL required" });
         }
 
-        const { getAIProvider, getDefaultProvider } = await import(
-          "./services/ai-providers"
-        );
+        const { getAIProvider, getDefaultProvider } =
+          await import("./services/ai-providers");
 
         const providerType = requestedProvider || getDefaultProvider();
         const provider = getAIProvider(providerType);
@@ -699,7 +692,7 @@ export async function registerRoutes(
           .status(500)
           .json({ message: err.message || "Failed to analyze image" });
       }
-    }
+    },
   );
 
   // === INGREDIENTS ROUTES ===
@@ -709,15 +702,16 @@ export async function registerRoutes(
     isAuthenticated,
     async (req, res) => {
       try {
+        const patient = await getOrCreatePatient(req);
         const ingredients = await storage.getIngredients(
-          req.patient!.id,
-          req.user!.id
+          patient.id,
+          req.user!.id,
         );
         res.json(ingredients);
       } catch (err: any) {
         res.status(500).json({ message: err.message });
       }
-    }
+    },
   );
 
   app.post(
@@ -725,16 +719,17 @@ export async function registerRoutes(
     isAuthenticated,
     async (req, res) => {
       try {
+        const patient = await getOrCreatePatient(req);
         const ingredient = await storage.addIngredient(
-          req.patient!.id,
+          patient.id,
           req.body,
-          req.user!.id
+          req.user!.id,
         );
         res.status(201).json(ingredient);
       } catch (err: any) {
         res.status(400).json({ message: err.message });
       }
-    }
+    },
   );
 
   app.post(
@@ -742,17 +737,18 @@ export async function registerRoutes(
     isAuthenticated,
     async (req, res) => {
       try {
+        const patient = await getOrCreatePatient(req);
         const { ingredients } = req.body;
         const result = await storage.addIngredients(
-          req.patient!.id,
+          patient.id,
           ingredients,
-          req.user!.id
+          req.user!.id,
         );
         res.status(201).json(result);
       } catch (err: any) {
         res.status(400).json({ message: err.message });
       }
-    }
+    },
   );
 
   app.delete(
@@ -760,7 +756,10 @@ export async function registerRoutes(
     isAuthenticated,
     async (req, res) => {
       try {
-        const ingredientId = parseInt(req.params.id);
+        const ingredientId = parseInt(req.params.id, 10);
+        if (isNaN(ingredientId)) {
+          return res.status(400).json({ message: "Invalid ingredient ID" });
+        }
         await storage.deleteIngredient(ingredientId, req.user!.id);
         res.status(204).send();
       } catch (err: any) {
@@ -770,7 +769,7 @@ export async function registerRoutes(
           res.status(500).json({ message: err.message });
         }
       }
-    }
+    },
   );
 
   app.post(
@@ -783,9 +782,8 @@ export async function registerRoutes(
           return res.status(400).json({ message: "Image URL required" });
         }
 
-        const { getAIProvider, getDefaultProvider } = await import(
-          "./services/ai-providers"
-        );
+        const { getAIProvider, getDefaultProvider } =
+          await import("./services/ai-providers");
 
         const providerType = requestedProvider || getDefaultProvider();
         const provider = getAIProvider(providerType);
@@ -804,7 +802,7 @@ export async function registerRoutes(
           .status(500)
           .json({ message: err.message || "Failed to scan ingredients" });
       }
-    }
+    },
   );
 
   // === RECIPES ROUTES ===
@@ -822,14 +820,14 @@ export async function registerRoutes(
         } = req.body;
 
         // Get user's current ingredients
+        const patient = await getOrCreatePatient(req);
         const ingredients = await storage.getIngredients(
-          req.patient!.id,
-          req.user!.id
+          patient.id,
+          req.user!.id,
         );
 
-        const { getAIProvider, getDefaultProvider } = await import(
-          "./services/ai-providers"
-        );
+        const { getAIProvider, getDefaultProvider } =
+          await import("./services/ai-providers");
 
         const providerType = requestedProvider || getDefaultProvider();
         const provider = getAIProvider(providerType);
@@ -844,7 +842,7 @@ export async function registerRoutes(
           ingredients.map((i) => i.name),
           cuisineMode || "surprise",
           maxRecipes || 3,
-          dietaryRestrictions
+          dietaryRestrictions,
         );
         res.json(result);
       } catch (err: any) {
@@ -853,7 +851,7 @@ export async function registerRoutes(
           .status(500)
           .json({ message: err.message || "Failed to suggest recipes" });
       }
-    }
+    },
   );
 
   app.get(
@@ -861,15 +859,13 @@ export async function registerRoutes(
     isAuthenticated,
     async (req, res) => {
       try {
-        const recipes = await storage.getSavedRecipes(
-          req.patient!.id,
-          req.user!.id
-        );
+        const patient = await getOrCreatePatient(req);
+        const recipes = await storage.getSavedRecipes(patient.id, req.user!.id);
         res.json(recipes);
       } catch (err: any) {
         res.status(500).json({ message: err.message });
       }
-    }
+    },
   );
 
   app.post(
@@ -877,16 +873,17 @@ export async function registerRoutes(
     isAuthenticated,
     async (req, res) => {
       try {
+        const patient = await getOrCreatePatient(req);
         const recipe = await storage.saveRecipe(
-          req.patient!.id,
+          patient.id,
           req.body,
-          req.user!.id
+          req.user!.id,
         );
         res.status(201).json(recipe);
       } catch (err: any) {
         res.status(400).json({ message: err.message });
       }
-    }
+    },
   );
 
   app.delete(
@@ -894,7 +891,10 @@ export async function registerRoutes(
     isAuthenticated,
     async (req, res) => {
       try {
-        const recipeId = parseInt(req.params.id);
+        const recipeId = parseInt(req.params.id, 10);
+        if (isNaN(recipeId)) {
+          return res.status(400).json({ message: "Invalid recipe ID" });
+        }
         await storage.deleteRecipe(recipeId, req.user!.id);
         res.status(204).send();
       } catch (err: any) {
@@ -904,7 +904,7 @@ export async function registerRoutes(
           res.status(500).json({ message: err.message });
         }
       }
-    }
+    },
   );
 
   return httpServer;

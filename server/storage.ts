@@ -50,6 +50,7 @@ export interface IStorage {
   getPatientByUserId(userId: string): Promise<Patient | undefined>;
   getUser(id: string): Promise<User | undefined>;
   createPatient(patient: Partial<Patient>): Promise<Patient>;
+  getOrCreatePatient(data: Partial<Patient>): Promise<Patient>;
   getMetrics(): Promise<Metric[]>;
   getMetric(code: string): Promise<Metric | undefined>;
   seedMetrics(metricsList: Metric[]): Promise<void>;
@@ -237,6 +238,28 @@ export class DatabaseStorage implements IStorage {
         dateOfBirth: insertPatient.dateOfBirth,
       })
       .returning();
+    return patient;
+  }
+
+  async getOrCreatePatient(data: Partial<Patient>): Promise<Patient> {
+    // Use upsert pattern to avoid race condition on concurrent requests
+    await db
+      .insert(patients)
+      .values({
+        userId: data.userId,
+        displayName: data.displayName || "User",
+        heightCm: data.heightCm,
+        gender: data.gender,
+        dateOfBirth: data.dateOfBirth,
+      })
+      .onConflictDoNothing({ target: patients.userId });
+
+    // Fetch the existing or just-created record
+    const [patient] = await db
+      .select()
+      .from(patients)
+      .where(eq(patients.userId, data.userId!));
+
     return patient;
   }
 
