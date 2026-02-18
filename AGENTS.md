@@ -1,246 +1,159 @@
 # AGENTS.md
 
-Guidance for AI coding agents working with this repository.
+Guidance for AI coding agents working on **Vitally**, a full-stack body metrics tracker.
 
-## Quick Reference
+**Stack:** React 18 + TypeScript + Vite (frontend), Express + TypeScript (backend), PostgreSQL + Drizzle ORM, Zod validation, TanStack React Query, Wouter routing, TailwindCSS + shadcn/ui.
 
-| Command                | Purpose                               |
-| ---------------------- | ------------------------------------- |
-| `npm run dev`          | Start dev server (Express + Vite HMR) |
-| `npm run check`        | TypeScript type-check                 |
-| `npm run build`        | Production build                      |
-| `npm run test`         | Run Vitest tests                      |
-| `npm run db:push`      | Push schema changes to PostgreSQL     |
-| `docker-compose up -d` | Start local Postgres                  |
+## Commands
 
-## Project Overview
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Start dev server (Express + Vite HMR) |
+| `npm run check` | TypeScript type-check (strict mode) |
+| `npm run build` | Production build |
+| `npm run test` | Run all Vitest tests |
+| `npm run test:watch` | Run tests in watch mode |
+| `npx vitest run path/to/file.test.ts` | Run a single test file |
+| `npx vitest run -t "test name"` | Run a single test by name |
+| `npm run db:push` | Push Drizzle schema changes to PostgreSQL |
+| `npm run db:generate` | Generate Drizzle migration files |
 
-**Vitally** is a full-stack body metrics and health tracking application built with:
+Tests are colocated with source (`*.test.ts` alongside the module). Vitest runs with `globals: true` and `fileParallelism: false`. Tests use `supertest` for route testing and `vi.mock()` for dependency isolation.
 
-- **Frontend:** React 18, TypeScript, Vite, TailwindCSS, shadcn/ui (Radix primitives)
-- **Backend:** Express.js, TypeScript
-- **Database:** PostgreSQL with Drizzle ORM
-- **State:** TanStack React Query
-- **Routing:** Wouter (client), Express routes (server)
-- **Validation:** Zod schemas (shared between client/server)
-
-## Monorepo Structure
+## Project Structure
 
 ```
-├── client/           # React frontend
-│   └── src/
-│       ├── components/   # UI components (shadcn/ui in /ui)
-│       ├── hooks/        # React Query hooks
-│       ├── pages/        # Route pages
-│       └── lib/          # Utilities
-├── server/           # Express backend
-│   ├── services/     # Business logic (AI providers, export, import)
-│   ├── routes.ts     # API route handlers
-│   └── storage.ts    # Database access layer
-├── shared/           # Shared code
-│   ├── schema.ts     # Drizzle tables + Zod schemas
-│   └── routes.ts     # API contract (Zod request/response schemas)
-└── migrations/       # Drizzle migrations
+client/src/           # React frontend
+  components/         # Named-export components (shadcn/ui primitives in /ui)
+  hooks/              # React Query hooks (use-*.ts)
+  pages/              # Route pages (default-export)
+  lib/                # Utilities (cn(), queryClient)
+server/               # Express backend
+  services/           # Business logic (AI providers, import/export)
+  routes.ts           # API route handlers
+  storage.ts          # Database access layer (IStorage interface)
+  auth.ts             # Authentication (Passport, sessions)
+  errors.ts           # Custom error classes (AuthenticationError, UnauthorizedError)
+shared/               # Shared between client & server
+  schema.ts           # Drizzle tables + Zod schemas + exported types
+  routes.ts           # API contract (Zod request/response schemas, path constants)
+  types/              # Pure TS interfaces (FHIR, import/export)
+  models/             # Auth table definitions
+migrations/           # Drizzle migration files
 ```
 
-## Path Aliases
+### Path Aliases
 
-| Alias      | Resolves To        |
-| ---------- | ------------------ |
-| `@/`       | `client/src/`      |
-| `@shared/` | `shared/`          |
+| Alias | Resolves To |
+|---|---|
+| `@/` | `client/src/` |
+| `@shared/` | `shared/` |
 | `@assets/` | `attached_assets/` |
 
-## Core Features
+## Code Style
 
-1. **Body Metrics Tracking** - Weight, circumferences, body composition
-2. **Goal Setting** - Monthly goals with direction (increase/decrease/maintain)
-3. **Macro Calculator** - BMR/TDEE calculations with multiple formulas
-4. **Habit Tracking** - Daily habits with contribution graph
-5. **Nutrition Tracking** - Meal logging with AI image analysis
-6. **Recipe Suggestions** - AI-powered recipe generation
-7. **Data Import/Export** - CSV import, FHIR export
+### Formatting
 
-## Database Schema
+- **2-space indentation**, no tabs
+- **Double quotes** for all strings and imports
+- **Semicolons** at the end of every statement
+- **Trailing commas** in multi-line argument lists and object literals
+- **ESM** throughout (`"type": "module"` in package.json) — use `import`/`export`, never `require`
+- No ESLint or Prettier configured; follow existing patterns
 
-### Key Tables
+### Import Order
 
-| Table                    | Purpose                                                    |
-| ------------------------ | ---------------------------------------------------------- |
-| `users`                  | Authentication (email/password or OAuth)                   |
-| `patients`               | User profile (1:1 with user), stores heightCm, gender, dob |
-| `metrics`                | Global metric registry (code, unit, kind)                  |
-| `observations`           | Measurement sessions (effectiveAt = when measured)         |
-| `observation_components` | Individual metric values within a session                  |
-| `goals`                  | Monthly goals per patient                                  |
-| `goal_targets`           | Target values for each metric within a goal                |
-| `habits`                 | Habit definitions                                          |
-| `habit_entries`          | Daily habit completions                                    |
-| `nutrition_goals`        | Daily macro targets                                        |
-| `meals`                  | Logged meals                                               |
-| `meal_items`             | Food items within meals                                    |
-| `ingredients`            | User's ingredient inventory                                |
-| `saved_recipes`          | AI-generated saved recipes                                 |
+1. Type-only imports (`import type { Express } from "express";`)
+2. React/framework imports (`useState`, `useEffect`)
+3. Third-party libraries (`zod`, `date-fns`, `wouter`)
+4. Shared alias imports (`@shared/schema`, `@shared/routes`)
+5. Client alias imports (`@/hooks/...`, `@/components/...`, `@/lib/...`)
+6. Relative imports (`./storage`, `./types`)
 
-### Important Patterns
+Separate `import type` from value imports. Group related imports together.
 
-- **Patient isolation:** All routes extract user from session, create/fetch patient
-- **Metric codes:** Always snake_case (e.g., `body_fat`, `bicep_r`)
-- **Dates:** YYYY-MM-DD strings in API, converted in storage layer
-- **Timestamps:** `effectiveAt` (when measured) vs `issuedAt` (when recorded)
+### Naming Conventions
 
-## API Structure
+| Kind | Convention | Examples |
+|---|---|---|
+| Page files | PascalCase | `Dashboard.tsx`, `NewMeasurement.tsx` |
+| Component files | PascalCase | `MetricCard.tsx`, `PageLayout.tsx` |
+| Hook files | kebab-case, `use-` prefix | `use-metrics.ts`, `use-habits.ts` |
+| Server/service files | kebab-case | `import-parser.ts`, `export-fhir.ts` |
+| Test files | colocated `.test.ts` suffix | `import-parser.test.ts` |
+| Variables/functions | camelCase | `getOrCreatePatient`, `isLoading` |
+| Components/classes | PascalCase | `MetricCard`, `DatabaseStorage` |
+| Types/interfaces | PascalCase | `Patient`, `CreateMealRequest` |
+| Constants | UPPER_SNAKE_CASE | `DEFAULT_METRICS`, `SALT_ROUNDS` |
+| Metric codes | snake_case | `body_fat`, `bicep_r`, `thigh_l` |
+| DB columns (SQL) | snake_case | `patient_id`, `effective_at` |
+| DB columns (TS) | camelCase | `patientId`, `effectiveAt` |
 
-Routes defined in `server/routes.ts`, contracts in `shared/routes.ts`.
+### React Components
 
-### Authentication
+- Always use **`function` declarations**, not arrow functions
+- **Pages:** `export default function PageName() { ... }`
+- **Components:** `export function ComponentName() { ... }` (named export, no default)
+- **Props:** define `interface FooProps { ... }` above the component, destructure in signature
+- **Barrel files:** component directories use `index.ts` with named re-exports
+- **Styling:** Tailwind utility classes, combine with `cn()` from `@/lib/utils`
 
-- `POST /api/auth/signup` - Create account
-- `POST /api/auth/login` - Login
-- `POST /api/auth/logout` - Logout
-- `GET /api/auth/user` - Current user
+### React Query Hooks
 
-### Metrics
+- One file per domain, multiple named exports per file
+- Query keys use `api.domain.action.path` from the shared contract
+- All fetches include `credentials: "include"` for session auth
+- Mutations call `queryClient.invalidateQueries()` on success with related query keys
+- Types inferred via `z.infer<typeof schema>` or imported from `@shared/schema`
 
-- `POST /api/bootstrap` - Initial load (patient + metrics)
-- `POST /api/measurements` - Create measurement session
-- `GET /api/measurements` - List measurements (with date range)
-- `GET /api/measurements/latest` - Most recent measurement
-- `GET /api/metrics/:code/timeseries` - Single metric history
+### Type Definitions
 
-### Goals
+- **Table select types:** `export type Patient = typeof patients.$inferSelect;`
+- **Zod-inferred request types:** `export type CreateMealRequest = z.infer<typeof createMealSchema>;`
+- **Props/contracts:** use `interface` (`interface IStorage`, `interface MetricCardProps`)
+- **Simple aliases/unions:** use `type` (`type AIProviderType = "openai" | "gemini"`)
+- All shared types live in `shared/schema.ts` or `shared/types/`
 
-- `GET /api/goals?month=YYYY-MM` - Get monthly goal
-- `PUT /api/goals` - Upsert monthly goal
-- `GET /api/progress?month=YYYY-MM` - Progress vs goals
+### Error Handling
 
-### Habits
-
-- `GET /api/habits` - List habits
-- `POST /api/habits` - Create habit
-- `PUT /api/habits/:id` - Update habit
-- `DELETE /api/habits/:id` - Delete habit
-- `POST /api/habits/:id/entries` - Toggle entry
-
-### Nutrition
-
-- `GET /api/nutrition/goals` - Macro targets
-- `POST /api/nutrition/goals` - Update targets
-- `GET /api/nutrition/meals?date=YYYY-MM-DD` - Meals for date
-- `POST /api/nutrition/meals` - Log meal
-- `DELETE /api/nutrition/meals/:id` - Delete meal
-- `POST /api/nutrition/analyze-image` - AI food analysis
-
-### AI Features
-
-- `POST /api/nutrition/analyze-image` - Food image → macros (OpenAI/Gemini)
-- `POST /api/recipes/suggest` - Generate recipes from ingredients (OpenAI/Gemini)
-- `POST /api/ingredients/scan` - Scan ingredient images
-
-## Frontend Architecture
-
-### Key Hooks (React Query)
-
-| Hook                   | File               | Purpose                     |
-| ---------------------- | ------------------ | --------------------------- |
-| `useAuth`              | `use-auth.ts`      | User authentication state   |
-| `useBootstrap`         | `use-metrics.ts`   | Initial app data            |
-| `useCreateMeasurement` | `use-metrics.ts`   | Create measurement mutation |
-| `useLatestMeasurement` | `use-metrics.ts`   | Latest measurement query    |
-| `useHabits`            | `use-habits.ts`    | Habit CRUD operations       |
-| `useNutritionGoals`    | `use-nutrition.ts` | Macro targets               |
-| `useMeals`             | `use-nutrition.ts` | Meal queries/mutations      |
-
-### Route Pages
-
-| Route               | Page Component        | Purpose                     |
-| ------------------- | --------------------- | --------------------------- |
-| `/`                 | `Dashboard.tsx`       | Overview with metrics cards |
-| `/measurements/new` | `NewMeasurement.tsx`  | Log new measurements        |
-| `/metrics`          | `MetricsExplorer.tsx` | Browse metric history       |
-| `/goals`            | `Goals.tsx`           | Set monthly goals           |
-| `/calculator`       | `Calculator.tsx`      | Macro calculator            |
-| `/habits`           | `Habits.tsx`          | Habit list                  |
-| `/habits/new`       | `CreateHabit.tsx`     | Create habit                |
-| `/habits/:id`       | `HabitDetail.tsx`     | Habit detail + calendar     |
-| `/nutrition`        | `Nutrition.tsx`       | Daily nutrition dashboard   |
-| `/nutrition/log`    | `LogMeal.tsx`         | Log meal with AI            |
-| `/import`           | `ImportData.tsx`      | CSV import                  |
-
-## AI Provider Pattern
-
-Located in `server/services/ai-providers/`:
-
+**Server routes** — validate with Zod, catch and return structured errors:
 ```typescript
-// Strategy pattern for AI providers
-interface AIImageAnalyzer {
-  analyzeImage(base64Image: string, mimeType: string): Promise<AnalysisResult>;
+try {
+  const input = someSchema.parse(req.body);
+  // ... business logic ...
+} catch (err) {
+  if (err instanceof z.ZodError) {
+    return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join(".") });
+  }
+  throw err; // Let Express handle unexpected errors
 }
-
-// Available providers
-- OpenAIProvider (GPT-4o Vision)
-- GeminiProvider (Gemini 1.5 Flash)
-
-// Factory selects based on request param or env
-getProvider(provider?: "openai" | "gemini"): AIImageAnalyzer
 ```
 
-## Environment Variables
+**Client hooks** — check `res.ok`, throw with message:
+```typescript
+if (!res.ok) {
+  const error = await res.json();
+  throw new Error(error.message || "Failed to ...");
+}
+```
 
-| Variable                | Required | Purpose                      |
-| ----------------------- | -------- | ---------------------------- |
-| `DATABASE_URL`          | Yes      | PostgreSQL connection string |
-| `SESSION_SECRET`        | Yes      | Express session secret       |
-| `OPENAI_API_KEY`        | For AI   | OpenAI API access            |
-| `GOOGLE_GEMINI_API_KEY` | For AI   | Gemini API access            |
-| `AWS_ACCESS_KEY_ID`     | For S3   | Image uploads                |
-| `AWS_SECRET_ACCESS_KEY` | For S3   | Image uploads                |
-| `S3_BUCKET`             | For S3   | Bucket name                  |
+**Error response shape** is always `{ message: string, field?: string }`.
 
-## Code Conventions
+## Database Patterns
 
-1. **Validation:** Always use Zod schemas from `shared/` for both client/server
-2. **Transactions:** Use `db.transaction()` for multi-step writes
-3. **Error handling:** Return `{ message, field? }` for validation errors
-4. **Query invalidation:** Invalidate related queries after mutations
-5. **Type safety:** Use exported types from `shared/schema.ts`
-6. **Components:** shadcn/ui pattern - copy to `components/ui/`, customize
-
-## Testing
-
-- Framework: Vitest
-- Test files: `*.test.ts` alongside source
-- Run: `npm run test` or `npm run test:watch`
-- Coverage areas: API routes, import/export services
+- Schema defined in `shared/schema.ts` using Drizzle `pgTable()` — run `npm run db:push` after changes
+- Data access through `server/storage.ts` — `IStorage` interface, `DatabaseStorage` implementation, singleton `export const storage`
+- Use `db.transaction()` for multi-step writes (e.g., observation + components)
+- **Patient isolation:** all routes extract user from session, then `getOrCreatePatient()` to get the patient; storage methods verify ownership via `verifyOwnership()`
+- **Dates:** `YYYY-MM-DD` strings in the API layer, converted in storage
+- **Timestamps:** `effectiveAt` = when measured, `issuedAt` = when recorded
 
 ## Common Tasks
 
-### Adding a New Metric
+**Add a new metric:** Add to `DEFAULT_METRICS` array in `server/routes.ts` — auto-seeded on startup.
 
-1. Add to `DEFAULT_METRICS` array in `server/routes.ts`
-2. Run app (auto-seeds on startup)
-3. Metric available in measurement forms
+**Add an API endpoint:** (1) Define Zod schemas in `shared/routes.ts`, (2) add handler in `server/routes.ts`, (3) create React Query hook in `client/src/hooks/`.
 
-### Adding a New API Endpoint
+**Add a page:** (1) Create in `client/src/pages/`, (2) add route in `client/src/App.tsx`, (3) add nav link in `Sidebar.tsx`.
 
-1. Define Zod schemas in `shared/routes.ts`
-2. Add handler in `server/routes.ts`
-3. Create React Query hook in `client/src/hooks/`
-
-### Adding a New Page
-
-1. Create page in `client/src/pages/`
-2. Add route in `client/src/App.tsx`
-3. Add navigation in `Sidebar.tsx` if needed
-
-### Database Changes
-
-1. Modify tables in `shared/schema.ts`
-2. Run `npm run db:push` to sync
-3. Update storage methods in `server/storage.ts`
-
-## Known Issues
-
-1. BMI calculation on Dashboard not fully implemented
-2. Trend analysis shows placeholder
-3. Some metric code mismatches (body-fat vs body_fat)
+**Database changes:** (1) Modify tables in `shared/schema.ts`, (2) run `npm run db:push`, (3) update storage methods in `server/storage.ts`.

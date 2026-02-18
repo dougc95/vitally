@@ -1,26 +1,36 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadBucketCommand, CreateBucketCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-export const BUCKET_NAME = process.env.S3_BUCKET || "body-metrics-tracker";
+// Railway object storage provides: ENDPOINT, ACCESS_KEY_ID, SECRET_ACCESS_KEY, REGION, BUCKET
+export const BUCKET_NAME = process.env.S3_BUCKET || process.env.BUCKET || "body-metrics-tracker";
 
-const isMinio = !!process.env.S3_ENDPOINT;
+const endpoint = process.env.S3_ENDPOINT || process.env.ENDPOINT;
+const isCustomEndpoint = !!endpoint;
 
-// Default to MinIO defaults if in dev/minio mode
-const accessKeyId = process.env.AWS_ACCESS_KEY_ID || (isMinio ? "minioadmin" : "");
-const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || (isMinio ? "minioadmin" : "");
-const region = process.env.AWS_REGION || "us-east-1";
+// Fall back to Railway-provided names, then MinIO defaults for local dev
+const accessKeyId = process.env.AWS_ACCESS_KEY_ID || process.env.ACCESS_KEY_ID || (isCustomEndpoint ? "minioadmin" : "");
+const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.SECRET_ACCESS_KEY || (isCustomEndpoint ? "minioadmin" : "");
+const region = process.env.AWS_REGION || process.env.REGION || "us-east-1";
+
+// Railway uses virtual-hosted-style; only force path style when explicitly opted in (e.g. MinIO)
+const forcePathStyle = process.env.S3_FORCE_PATH_STYLE === "true";
 
 export const s3 = new S3Client({
   region,
-  endpoint: process.env.S3_ENDPOINT,
-  forcePathStyle: isMinio,
+  endpoint,
+  forcePathStyle,
   credentials: (accessKeyId && secretAccessKey) ? {
     accessKeyId,
     secretAccessKey,
-  } : undefined, // Let AWS SDK default provider chain handle it if vars are missing but configured elsewhere
+  } : undefined,
 });
 
 export async function initBucket() {
+  if (!accessKeyId || !secretAccessKey) {
+    console.log("S3 credentials not configured, skipping bucket init.");
+    return;
+  }
+
   try {
     await s3.send(new HeadBucketCommand({ Bucket: BUCKET_NAME }));
     console.log(`S3 Bucket "${BUCKET_NAME}" exists.`);
