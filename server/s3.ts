@@ -1,16 +1,40 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadBucketCommand, CreateBucketCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  HeadBucketCommand,
+  CreateBucketCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-// Railway object storage provides: ENDPOINT, ACCESS_KEY_ID, SECRET_ACCESS_KEY, REGION, BUCKET
-export const BUCKET_NAME = process.env.S3_BUCKET || process.env.BUCKET || "body-metrics-tracker";
+// Railway object storage provides: AWS_S3_BUCKET_NAME, AWS_ENDPOINT_URL, AWS_DEFAULT_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+export const BUCKET_NAME =
+  process.env.AWS_S3_BUCKET_NAME ||
+  process.env.S3_BUCKET ||
+  process.env.BUCKET ||
+  "body-metrics-tracker";
 
-const endpoint = process.env.S3_ENDPOINT || process.env.ENDPOINT;
+const endpoint =
+  process.env.AWS_ENDPOINT_URL ||
+  process.env.S3_ENDPOINT ||
+  process.env.ENDPOINT;
 const isCustomEndpoint = !!endpoint;
 
-// Fall back to Railway-provided names, then MinIO defaults for local dev
-const accessKeyId = process.env.AWS_ACCESS_KEY_ID || process.env.ACCESS_KEY_ID || (isCustomEndpoint ? "minioadmin" : "");
-const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.SECRET_ACCESS_KEY || (isCustomEndpoint ? "minioadmin" : "");
-const region = process.env.AWS_REGION || process.env.REGION || "us-east-1";
+// Fall back to legacy names, then MinIO defaults for local dev
+const accessKeyId =
+  process.env.AWS_ACCESS_KEY_ID ||
+  process.env.ACCESS_KEY_ID ||
+  (isCustomEndpoint ? "minioadmin" : "");
+const secretAccessKey =
+  process.env.AWS_SECRET_ACCESS_KEY ||
+  process.env.SECRET_ACCESS_KEY ||
+  (isCustomEndpoint ? "minioadmin" : "");
+const region =
+  process.env.AWS_DEFAULT_REGION ||
+  process.env.AWS_REGION ||
+  process.env.REGION ||
+  "us-east-1";
 
 // Railway uses virtual-hosted-style; only force path style when explicitly opted in (e.g. MinIO)
 const forcePathStyle = process.env.S3_FORCE_PATH_STYLE === "true";
@@ -19,10 +43,13 @@ export const s3 = new S3Client({
   region,
   endpoint,
   forcePathStyle,
-  credentials: (accessKeyId && secretAccessKey) ? {
-    accessKeyId,
-    secretAccessKey,
-  } : undefined,
+  credentials:
+    accessKeyId && secretAccessKey
+      ? {
+          accessKeyId,
+          secretAccessKey,
+        }
+      : undefined,
 });
 
 export async function initBucket() {
