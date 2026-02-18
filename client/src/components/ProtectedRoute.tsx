@@ -17,7 +17,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       const redirect = encodeURIComponent(location);
       setLocation(`/login?redirect=${redirect}`);
     }
-  }, [isLoading, isAuthenticated, location, setLocation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, isAuthenticated]);
 
   // Show loading screen while checking authentication
   if (isLoading) {

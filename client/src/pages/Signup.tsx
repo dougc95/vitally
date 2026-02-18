@@ -3,7 +3,13 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Loader2, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -28,7 +34,7 @@ export default function Signup() {
       toast({
         title: "Missing fields",
         description: "Please enter email and password.",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -37,7 +43,7 @@ export default function Signup() {
       toast({
         title: "Password too short",
         description: "Password must be at least 8 characters long.",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -46,7 +52,7 @@ export default function Signup() {
       toast({
         title: "Passwords don't match",
         description: "Please ensure both passwords match.",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -69,19 +75,22 @@ export default function Signup() {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: "Registration failed" }));
+        const error = await response
+          .json()
+          .catch(() => ({ message: "Registration failed" }));
 
         if (response.status === 409) {
           toast({
             title: "Email already registered",
-            description: "This email is already in use. Please sign in instead.",
-            variant: "destructive"
+            description:
+              "This email is already in use. Please sign in instead.",
+            variant: "destructive",
           });
         } else {
           toast({
             title: "Registration failed",
             description: error.message || "Please try again.",
-            variant: "destructive"
+            variant: "destructive",
           });
         }
         setIsLoading(false);
@@ -91,7 +100,7 @@ export default function Signup() {
       const data = await response.json();
 
       // Update React Query cache with user data (auto-logged in)
-      queryClient.setQueryData(["/api/auth/user"], data.user);
+      queryClient.setQueryData(["/api/auth/user"], data);
 
       toast({
         title: "Welcome!",
@@ -104,7 +113,7 @@ export default function Signup() {
       toast({
         title: "Something went wrong",
         description: "Please try again later.",
-        variant: "destructive"
+        variant: "destructive",
       });
       setIsLoading(false);
     }
@@ -198,11 +207,7 @@ export default function Signup() {
                 minLength={8}
               />
             </div>
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
-            >
+            <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -214,7 +219,9 @@ export default function Signup() {
             </Button>
           </form>
           <div className="mt-6 text-center text-sm">
-            <span className="text-muted-foreground">Already have an account? </span>
+            <span className="text-muted-foreground">
+              Already have an account?{" "}
+            </span>
             <button
               onClick={() => setLocation("/login")}
               className="text-primary hover:underline font-medium"

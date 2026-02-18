@@ -3,7 +3,13 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Loader2, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -24,7 +30,7 @@ export default function Login() {
       toast({
         title: "Missing fields",
         description: "Please enter both email and password.",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -42,11 +48,13 @@ export default function Login() {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: "Invalid credentials" }));
+        const error = await response
+          .json()
+          .catch(() => ({ message: "Invalid credentials" }));
         toast({
           title: "Login failed",
           description: error.message || "Invalid email or password",
-          variant: "destructive"
+          variant: "destructive",
         });
         setIsLoading(false);
         return;
@@ -55,7 +63,7 @@ export default function Login() {
       const data = await response.json();
 
       // Update React Query cache with user data
-      queryClient.setQueryData(["/api/auth/user"], data.user);
+      queryClient.setQueryData(["/api/auth/user"], data);
 
       toast({
         title: "Welcome back!",
@@ -64,13 +72,13 @@ export default function Login() {
 
       // Handle redirect
       const searchParams = new URLSearchParams(window.location.search);
-      const redirectTo = searchParams.get('redirect') || '/';
+      const redirectTo = searchParams.get("redirect") || "/";
       setLocation(redirectTo);
     } catch (error) {
       toast({
         title: "Something went wrong",
         description: "Please try again later.",
-        variant: "destructive"
+        variant: "destructive",
       });
       setIsLoading(false);
     }
@@ -120,11 +128,7 @@ export default function Login() {
                 autoComplete="current-password"
               />
             </div>
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
-            >
+            <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -136,7 +140,9 @@ export default function Login() {
             </Button>
           </form>
           <div className="mt-6 text-center text-sm">
-            <span className="text-muted-foreground">Don't have an account? </span>
+            <span className="text-muted-foreground">
+              Don't have an account?{" "}
+            </span>
             <button
               onClick={() => setLocation("/signup")}
               className="text-primary hover:underline font-medium"
