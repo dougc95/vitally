@@ -5,6 +5,11 @@ import {
   createHabitSchema,
   updateHabitSchema,
   toggleHabitEntrySchema,
+  sendFriendRequestSchema,
+  socialFeedQuerySchema,
+  updateSocialPrivacySettingsSchema,
+  friendshipStatusEnum,
+  habitActivityEventTypeEnum,
   updateNutritionGoalSchema,
   createMealSchema,
   metrics,
@@ -38,6 +43,52 @@ export const errorSchemas = {
     message: z.string(),
   }),
 };
+
+const socialProfileSchema = z.object({
+  patientId: z.number(),
+  displayName: z.string(),
+  profileImageUrl: z.string().nullable(),
+});
+
+const friendshipWithProfilesSchema = z.object({
+  id: z.number(),
+  requesterPatientId: z.number(),
+  addresseePatientId: z.number(),
+  status: friendshipStatusEnum,
+  createdAt: z.string(),
+  respondedAt: z.string().nullable(),
+  requester: socialProfileSchema,
+  addressee: socialProfileSchema,
+});
+
+const friendRequestsResponseSchema = z.object({
+  incoming: z.array(friendshipWithProfilesSchema),
+  outgoing: z.array(friendshipWithProfilesSchema),
+});
+
+const friendFeedItemSchema = z.object({
+  id: z.number(),
+  actor: socialProfileSchema,
+  eventType: habitActivityEventTypeEnum,
+  habit: z.object({
+    id: z.number(),
+    title: z.string().optional(),
+  }),
+  eventDate: z.string().optional(),
+  createdAt: z.string(),
+});
+
+const friendFeedResponseSchema = z.object({
+  items: z.array(friendFeedItemSchema),
+  nextCursor: z.string().nullable(),
+});
+
+const socialPrivacySettingsResponseSchema = z.object({
+  patientId: z.number(),
+  shareHabitActivity: z.boolean(),
+  showHabitName: z.boolean(),
+  updatedAt: z.string(),
+});
 
 // ============================================
 // API CONTRACT
@@ -106,7 +157,7 @@ export const api = {
           z.object({
             date: z.string(),
             value: z.number(),
-          })
+          }),
         ),
         404: errorSchemas.notFound,
       },
@@ -145,7 +196,7 @@ export const api = {
             status: z.enum(["on-track", "off-track", "no-data", "no-target"]),
             delta: z.number().nullable(),
             direction: z.string().optional(),
-          })
+          }),
         ),
       },
     },
@@ -301,6 +352,97 @@ export const api = {
       },
     },
   },
+  social: {
+    friends: {
+      requests: {
+        create: {
+          method: "POST" as const,
+          path: "/api/social/friends/requests",
+          input: sendFriendRequestSchema,
+          responses: {
+            201: friendshipWithProfilesSchema,
+            400: errorSchemas.validation,
+            404: errorSchemas.notFound,
+          },
+        },
+        list: {
+          method: "GET" as const,
+          path: "/api/social/friends/requests",
+          responses: {
+            200: friendRequestsResponseSchema,
+          },
+        },
+        accept: {
+          method: "POST" as const,
+          path: "/api/social/friends/requests/:id/accept",
+          responses: {
+            200: friendshipWithProfilesSchema,
+            404: errorSchemas.notFound,
+          },
+        },
+        decline: {
+          method: "POST" as const,
+          path: "/api/social/friends/requests/:id/decline",
+          responses: {
+            200: friendshipWithProfilesSchema,
+            404: errorSchemas.notFound,
+          },
+        },
+        block: {
+          method: "POST" as const,
+          path: "/api/social/friends/requests/:id/block",
+          responses: {
+            200: friendshipWithProfilesSchema,
+            404: errorSchemas.notFound,
+          },
+        },
+      },
+      list: {
+        method: "GET" as const,
+        path: "/api/social/friends",
+        responses: {
+          200: z.array(socialProfileSchema),
+        },
+      },
+      remove: {
+        method: "DELETE" as const,
+        path: "/api/social/friends/:friendPatientId",
+        responses: {
+          204: z.undefined(),
+          404: errorSchemas.notFound,
+        },
+      },
+    },
+    feed: {
+      list: {
+        method: "GET" as const,
+        path: "/api/social/feed",
+        input: socialFeedQuerySchema.optional(),
+        responses: {
+          200: friendFeedResponseSchema,
+        },
+      },
+    },
+    privacy: {
+      get: {
+        method: "GET" as const,
+        path: "/api/social/privacy",
+        responses: {
+          200: socialPrivacySettingsResponseSchema,
+        },
+      },
+      update: {
+        method: "PUT" as const,
+        path: "/api/social/privacy",
+        input: updateSocialPrivacySettingsSchema,
+        responses: {
+          200: socialPrivacySettingsResponseSchema,
+          400: errorSchemas.validation,
+        },
+      },
+    },
+    friendshipStatus: friendshipStatusEnum,
+  },
   nutrition: {
     goals: {
       get: {
@@ -371,7 +513,7 @@ export const api = {
                 confidence: z.number(),
                 quantity: z.number(),
                 unit: z.string(),
-              })
+              }),
             ),
           }),
           500: errorSchemas.internal,
@@ -425,7 +567,7 @@ export const api = {
                 unit: z.string(),
                 category: z.string(),
                 confidence: z.number(),
-              })
+              }),
             ),
           }),
           500: errorSchemas.internal,
@@ -455,7 +597,7 @@ export const api = {
                   carbs: z.number(),
                   fat: z.number(),
                 }),
-              })
+              }),
             ),
           }),
           500: errorSchemas.internal,
@@ -494,7 +636,7 @@ export const api = {
 // ============================================
 export function buildUrl(
   path: string,
-  params?: Record<string, string | number>
+  params?: Record<string, string | number>,
 ): string {
   let url = path;
   if (params) {

@@ -9,10 +9,13 @@ import {
   numeric,
   real,
   varchar,
+  index,
+  uniqueIndex,
+  check,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 import { users } from "./models/auth";
 export * from "./models/auth";
@@ -118,6 +121,96 @@ export const habitEntries = pgTable("habit_entries", {
   completed: boolean("completed").default(true).notNull(),
   note: text("note"),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const friendshipStatusValues = [
+  "pending",
+  "accepted",
+  "declined",
+  "blocked",
+] as const;
+
+export const habitActivityEventTypeValues = [
+  "habit_completed",
+  "habit_uncompleted",
+  "habit_created",
+] as const;
+
+export const friendshipStatusEnum = z.enum(friendshipStatusValues);
+export const habitActivityEventTypeEnum = z.enum(habitActivityEventTypeValues);
+
+export const friendships = pgTable(
+  "friendships",
+  {
+    id: serial("id").primaryKey(),
+    requesterPatientId: integer("requester_patient_id")
+      .references(() => patients.id, { onDelete: "cascade" })
+      .notNull(),
+    addresseePatientId: integer("addressee_patient_id")
+      .references(() => patients.id, { onDelete: "cascade" })
+      .notNull(),
+    status: text("status", { enum: friendshipStatusValues })
+      .default("pending")
+      .notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    respondedAt: timestamp("responded_at"),
+  },
+  (table) => ({
+    requesterAddresseeUnique: uniqueIndex(
+      "friendships_requester_addressee_unique",
+    ).on(table.requesterPatientId, table.addresseePatientId),
+    requesterStatusIdx: index("friendships_requester_status_idx").on(
+      table.requesterPatientId,
+      table.status,
+    ),
+    addresseeStatusIdx: index("friendships_addressee_status_idx").on(
+      table.addresseePatientId,
+      table.status,
+    ),
+    noSelfFriendshipChk: check(
+      "friendships_no_self_chk",
+      sql`${table.requesterPatientId} <> ${table.addresseePatientId}`,
+    ),
+  }),
+);
+
+export const habitActivityEvents = pgTable(
+  "habit_activity_events",
+  {
+    id: serial("id").primaryKey(),
+    actorPatientId: integer("actor_patient_id")
+      .references(() => patients.id, { onDelete: "cascade" })
+      .notNull(),
+    habitId: integer("habit_id")
+      .references(() => habits.id, { onDelete: "cascade" })
+      .notNull(),
+    habitEntryId: integer("habit_entry_id").references(() => habitEntries.id, {
+      onDelete: "set null",
+    }),
+    eventType: text("event_type", {
+      enum: habitActivityEventTypeValues,
+    }).notNull(),
+    eventDate: date("event_date"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    createdAtIdx: index("habit_activity_events_created_at_idx").on(
+      table.createdAt,
+    ),
+    actorCreatedAtIdx: index("habit_activity_events_actor_created_at_idx").on(
+      table.actorPatientId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export const socialPrivacySettings = pgTable("social_privacy_settings", {
+  patientId: integer("patient_id")
+    .references(() => patients.id, { onDelete: "cascade" })
+    .primaryKey(),
+  shareHabitActivity: boolean("share_habit_activity").default(true).notNull(),
+  showHabitName: boolean("show_habit_name").default(true).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const calculations = pgTable("calculations", {
@@ -276,7 +369,7 @@ export const observationsRelations = relations(
       references: [patients.id],
     }),
     components: many(observationComponents),
-  })
+  }),
 );
 
 export const observationComponentsRelations = relations(
@@ -290,7 +383,7 @@ export const observationComponentsRelations = relations(
       fields: [observationComponents.metricCode],
       references: [metrics.code],
     }),
-  })
+  }),
 );
 
 export const goalsRelations = relations(goals, ({ one, many }) => ({
@@ -327,6 +420,47 @@ export const habitEntriesRelations = relations(habitEntries, ({ one }) => ({
   }),
 }));
 
+export const friendshipsRelations = relations(friendships, ({ one }) => ({
+  requester: one(patients, {
+    fields: [friendships.requesterPatientId],
+    references: [patients.id],
+    relationName: "friendshipRequester",
+  }),
+  addressee: one(patients, {
+    fields: [friendships.addresseePatientId],
+    references: [patients.id],
+    relationName: "friendshipAddressee",
+  }),
+}));
+
+export const habitActivityEventsRelations = relations(
+  habitActivityEvents,
+  ({ one }) => ({
+    actor: one(patients, {
+      fields: [habitActivityEvents.actorPatientId],
+      references: [patients.id],
+    }),
+    habit: one(habits, {
+      fields: [habitActivityEvents.habitId],
+      references: [habits.id],
+    }),
+    habitEntry: one(habitEntries, {
+      fields: [habitActivityEvents.habitEntryId],
+      references: [habitEntries.id],
+    }),
+  }),
+);
+
+export const socialPrivacySettingsRelations = relations(
+  socialPrivacySettings,
+  ({ one }) => ({
+    patient: one(patients, {
+      fields: [socialPrivacySettings.patientId],
+      references: [patients.id],
+    }),
+  }),
+);
+
 export const nutritionGoalsRelations = relations(nutritionGoals, ({ one }) => ({
   patient: one(patients, {
     fields: [nutritionGoals.patientId],
@@ -356,7 +490,7 @@ export const userIngredientsRelations = relations(
       fields: [userIngredients.patientId],
       references: [patients.id],
     }),
-  })
+  }),
 );
 
 export const savedRecipesRelations = relations(
@@ -367,7 +501,7 @@ export const savedRecipesRelations = relations(
       references: [patients.id],
     }),
     history: many(recipeHistory),
-  })
+  }),
 );
 
 export const recipeHistoryRelations = relations(recipeHistory, ({ one }) => ({
@@ -393,7 +527,7 @@ export const insertObservationSchema = createInsertSchema(observations).omit({
   issuedAt: true,
 });
 export const insertObservationComponentSchema = createInsertSchema(
-  observationComponents
+  observationComponents,
 ).omit({ id: true });
 export const insertGoalSchema = createInsertSchema(goals).omit({
   id: true,
@@ -462,6 +596,25 @@ export const insertHabitEntrySchema = createInsertSchema(habitEntries).omit({
   createdAt: true,
 });
 
+export const insertFriendshipSchema = createInsertSchema(friendships).omit({
+  id: true,
+  createdAt: true,
+  respondedAt: true,
+});
+
+export const insertHabitActivityEventSchema = createInsertSchema(
+  habitActivityEvents,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSocialPrivacySettingsSchema = createInsertSchema(
+  socialPrivacySettings,
+).omit({
+  updatedAt: true,
+});
+
 export type InsertCalculation = z.infer<typeof insertCalculationSchema>;
 export type Calculation = typeof calculations.$inferSelect;
 
@@ -502,7 +655,7 @@ export const upsertGoalSchema = z.object({
       targetValue: z.number(),
       direction: z.enum(["increase", "decrease", "maintain"]).optional(),
       tolerance: z.number().optional(),
-    })
+    }),
   ),
 });
 
@@ -529,6 +682,52 @@ export type Habit = typeof habits.$inferSelect;
 export type HabitEntry = typeof habitEntries.$inferSelect;
 export type InsertHabit = z.infer<typeof insertHabitSchema>;
 export type InsertHabitEntry = z.infer<typeof insertHabitEntrySchema>;
+export type Friendship = typeof friendships.$inferSelect;
+export type HabitActivityEvent = typeof habitActivityEvents.$inferSelect;
+export type SocialPrivacySettings = typeof socialPrivacySettings.$inferSelect;
+export type FriendshipStatus = z.infer<typeof friendshipStatusEnum>;
+export type HabitActivityEventType = z.infer<typeof habitActivityEventTypeEnum>;
+
+export type InsertFriendship = z.infer<typeof insertFriendshipSchema>;
+export type InsertHabitActivityEvent = z.infer<
+  typeof insertHabitActivityEventSchema
+>;
+export type InsertSocialPrivacySettings = z.infer<
+  typeof insertSocialPrivacySettingsSchema
+>;
+
+export type SocialProfile = {
+  patientId: number;
+  displayName: string;
+  profileImageUrl: string | null;
+};
+
+export type FriendshipWithProfiles = Friendship & {
+  requester: SocialProfile;
+  addressee: SocialProfile;
+};
+
+export type FriendRequestsResponse = {
+  incoming: FriendshipWithProfiles[];
+  outgoing: FriendshipWithProfiles[];
+};
+
+export type FriendFeedItem = {
+  id: number;
+  actor: SocialProfile;
+  eventType: HabitActivityEventType;
+  habit: {
+    id: number;
+    title?: string;
+  };
+  eventDate?: string;
+  createdAt: string;
+};
+
+export type FriendFeedResponse = {
+  items: FriendFeedItem[];
+  nextCursor: string | null;
+};
 
 export type HabitWithEntries = Habit & {
   entries: HabitEntry[];
@@ -554,9 +753,36 @@ export const toggleHabitEntrySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD format"),
 });
 
+export const sendFriendRequestSchema = z.object({
+  email: z.string().email("Valid email is required"),
+});
+
+export const socialFeedQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+export const updateSocialPrivacySettingsSchema = z
+  .object({
+    shareHabitActivity: z.boolean().optional(),
+    showHabitName: z.boolean().optional(),
+  })
+  .refine(
+    (data) =>
+      data.shareHabitActivity !== undefined || data.showHabitName !== undefined,
+    {
+      message: "At least one field is required",
+    },
+  );
+
 export type CreateHabitRequest = z.infer<typeof createHabitSchema>;
 export type UpdateHabitRequest = z.infer<typeof updateHabitSchema>;
 export type ToggleHabitEntryRequest = z.infer<typeof toggleHabitEntrySchema>;
+export type SendFriendRequestRequest = z.infer<typeof sendFriendRequestSchema>;
+export type SocialFeedQueryRequest = z.infer<typeof socialFeedQuerySchema>;
+export type UpdateSocialPrivacySettingsRequest = z.infer<
+  typeof updateSocialPrivacySettingsSchema
+>;
 
 export const HABIT_COLORS = [
   { name: "Mint", value: "hsl(173 58% 39%)" },
@@ -574,7 +800,7 @@ export type Meal = typeof meals.$inferSelect;
 export type MealItem = typeof mealItems.$inferSelect;
 
 export const insertNutritionGoalSchema = createInsertSchema(
-  nutritionGoals
+  nutritionGoals,
 ).omit({
   id: true,
   updatedAt: true,
@@ -643,7 +869,7 @@ export const createMealSchema = z.object({
       protein: z.number(),
       carbs: z.number(),
       fat: z.number(),
-    })
+    }),
   ),
 });
 

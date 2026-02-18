@@ -560,6 +560,256 @@ export async function registerRoutes(
     }
   });
 
+  // === SOCIAL ===
+  app.post(
+    api.social.friends.requests.create.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const input = api.social.friends.requests.create.input.parse(req.body);
+        const patient = await getOrCreatePatient(req);
+        const request = await storage.createFriendRequest(
+          patient.id,
+          input.email,
+          req.user!.id,
+        );
+        res.status(201).json(request);
+      } catch (err: any) {
+        if (err instanceof z.ZodError) {
+          return res.status(400).json({
+            message: err.errors[0].message,
+            field: err.errors[0].path.join("."),
+          });
+        }
+
+        if (err.message?.includes("not found")) {
+          return res.status(404).json({ message: err.message });
+        }
+
+        if (
+          err.message?.includes("already") ||
+          err.message?.includes("cannot") ||
+          err.message?.includes("blocked")
+        ) {
+          return res.status(400).json({ message: err.message });
+        }
+
+        res.status(500).json({ message: err.message });
+      }
+    },
+  );
+
+  app.get(
+    api.social.friends.requests.list.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const patient = await getOrCreatePatient(req);
+        const requests = await storage.getFriendRequests(
+          patient.id,
+          req.user!.id,
+        );
+        res.json(requests);
+      } catch (err: any) {
+        res.status(500).json({ message: err.message });
+      }
+    },
+  );
+
+  app.post(
+    api.social.friends.requests.accept.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const requestId = parseInt(req.params.id, 10);
+        if (isNaN(requestId)) {
+          return res.status(400).json({ message: "Invalid request ID" });
+        }
+
+        const patient = await getOrCreatePatient(req);
+        const request = await storage.acceptFriendRequest(
+          requestId,
+          patient.id,
+          req.user!.id,
+        );
+        res.json(request);
+      } catch (err: any) {
+        if (
+          err.message?.includes("not found") ||
+          err.message?.includes("Access denied")
+        ) {
+          return res.status(404).json({ message: err.message });
+        }
+
+        if (err.message?.includes("pending")) {
+          return res.status(400).json({ message: err.message });
+        }
+
+        res.status(500).json({ message: err.message });
+      }
+    },
+  );
+
+  app.post(
+    api.social.friends.requests.decline.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const requestId = parseInt(req.params.id, 10);
+        if (isNaN(requestId)) {
+          return res.status(400).json({ message: "Invalid request ID" });
+        }
+
+        const patient = await getOrCreatePatient(req);
+        const request = await storage.declineFriendRequest(
+          requestId,
+          patient.id,
+          req.user!.id,
+        );
+        res.json(request);
+      } catch (err: any) {
+        if (
+          err.message?.includes("not found") ||
+          err.message?.includes("Access denied")
+        ) {
+          return res.status(404).json({ message: err.message });
+        }
+
+        if (err.message?.includes("pending")) {
+          return res.status(400).json({ message: err.message });
+        }
+
+        res.status(500).json({ message: err.message });
+      }
+    },
+  );
+
+  app.post(
+    api.social.friends.requests.block.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const requestId = parseInt(req.params.id, 10);
+        if (isNaN(requestId)) {
+          return res.status(400).json({ message: "Invalid request ID" });
+        }
+
+        const patient = await getOrCreatePatient(req);
+        const request = await storage.blockFriendRequest(
+          requestId,
+          patient.id,
+          req.user!.id,
+        );
+        res.json(request);
+      } catch (err: any) {
+        if (
+          err.message?.includes("not found") ||
+          err.message?.includes("Access denied")
+        ) {
+          return res.status(404).json({ message: err.message });
+        }
+
+        res.status(500).json({ message: err.message });
+      }
+    },
+  );
+
+  app.get(api.social.friends.list.path, isAuthenticated, async (req, res) => {
+    try {
+      const patient = await getOrCreatePatient(req);
+      const friends = await storage.listFriends(patient.id, req.user!.id);
+      res.json(friends);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete(
+    api.social.friends.remove.path,
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const friendPatientId = parseInt(req.params.friendPatientId, 10);
+        if (isNaN(friendPatientId)) {
+          return res.status(400).json({ message: "Invalid friend patient ID" });
+        }
+
+        const patient = await getOrCreatePatient(req);
+        await storage.removeFriend(patient.id, friendPatientId, req.user!.id);
+        res.status(204).send();
+      } catch (err: any) {
+        if (err.message?.includes("not found")) {
+          return res.status(404).json({ message: err.message });
+        }
+        res.status(500).json({ message: err.message });
+      }
+    },
+  );
+
+  app.get(api.social.feed.list.path, isAuthenticated, async (req, res) => {
+    try {
+      const patient = await getOrCreatePatient(req);
+      const input = api.social.feed.list.input
+        ? api.social.feed.list.input.parse(req.query)
+        : undefined;
+
+      const feed = await storage.getFriendFeed(
+        patient.id,
+        req.user!.id,
+        input?.cursor,
+        input?.limit,
+      );
+      res.json(feed);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join("."),
+        });
+      }
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get(api.social.privacy.get.path, isAuthenticated, async (req, res) => {
+    try {
+      const patient = await getOrCreatePatient(req);
+      const settings = await storage.getSocialPrivacySettings(
+        patient.id,
+        req.user!.id,
+      );
+      res.json(settings);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.put(api.social.privacy.update.path, isAuthenticated, async (req, res) => {
+    try {
+      const patient = await getOrCreatePatient(req);
+      const input = api.social.privacy.update.input.parse(req.body);
+      const settings = await storage.updateSocialPrivacySettings(
+        patient.id,
+        input,
+        req.user!.id,
+      );
+      res.json(settings);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join("."),
+        });
+      }
+
+      if (err.message?.includes("Access denied")) {
+        return res.status(403).json({ message: err.message });
+      }
+
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // === NUTRITION ===
   app.get(api.nutrition.goals.get.path, isAuthenticated, async (req, res) => {
     try {

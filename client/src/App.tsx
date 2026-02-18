@@ -17,6 +17,7 @@ import Calculator from "@/pages/Calculator";
 import Habits from "@/pages/Habits";
 import CreateHabit from "@/pages/CreateHabit";
 import HabitDetail from "@/pages/HabitDetail";
+import Friends from "@/pages/Friends";
 import Nutrition from "@/pages/Nutrition";
 import NutritionSettings from "@/pages/NutritionSettings";
 import LogMeal from "@/pages/LogMeal";
@@ -76,6 +77,11 @@ function Router() {
       <Route path="/habits/:id">
         <ProtectedRoute>
           <HabitDetail />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/friends">
+        <ProtectedRoute>
+          <Friends />
         </ProtectedRoute>
       </Route>
       <Route path="/nutrition">
