@@ -26,19 +26,21 @@ On your web service, go to **Variables** and add the following:
 
 ### Required
 
-| Variable | Value | Notes |
-|---|---|---|
-| `DATABASE_URL` | *(auto-injected)* | Linked from the PostgreSQL service in step 2 |
-| `SESSION_SECRET` | Random string | Generate one with `openssl rand -base64 32` |
-| `NODE_ENV` | `production` | Enables secure cookies and production static serving |
+| Variable         | Value             | Notes                                                |
+| ---------------- | ----------------- | ---------------------------------------------------- |
+| `DATABASE_URL`   | _(auto-injected)_ | Linked from the PostgreSQL service in step 2         |
+| `SESSION_SECRET` | Random string     | Generate one with `openssl rand -base64 32`          |
+| `NODE_ENV`       | `production`      | Enables secure cookies and production static serving |
 
 ### Optional
 
-| Variable | Value | Notes |
-|---|---|---|
-| `OPENAI_API_KEY` | Your OpenAI key | Enables AI-powered food analysis and recipe suggestions (GPT-4o) |
-| `GOOGLE_GEMINI_API_KEY` | Your Gemini key | Alternative AI provider (Gemini 1.5 Flash) |
-| S3 vars (see below) | — | For image uploads; auto-injected if Railway Object Storage is linked |
+| Variable                | Value                           | Notes                                                                                                                  |
+| ----------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `OPENAI_API_KEY`        | Your OpenAI key                 | Enables AI-powered food analysis and recipe suggestions (GPT-4o)                                                       |
+| `GOOGLE_GEMINI_API_KEY` | Your Gemini key                 | Alternative AI provider (Gemini 1.5 Flash)                                                                             |
+| `GOOGLE_CLIENT_ID`      | Your Google OAuth client ID     | Enables "Sign in with Google". Create at [Google Cloud Console](https://console.cloud.google.com/apis/credentials)     |
+| `GOOGLE_CLIENT_SECRET`  | Your Google OAuth client secret | Required alongside `GOOGLE_CLIENT_ID`. Set authorized redirect URI to `https://<your-domain>/api/auth/google/callback` |
+| S3 vars (see below)     | —                               | For image uploads; auto-injected if Railway Object Storage is linked                                                   |
 
 > The app works without any optional variables — AI nutrition features and image uploads are gracefully disabled when their keys are absent.
 
@@ -46,10 +48,10 @@ On your web service, go to **Variables** and add the following:
 
 In your web service **Settings**, set:
 
-| Setting | Value |
-|---|---|
+| Setting           | Value                              |
+| ----------------- | ---------------------------------- |
 | **Build Command** | `npm run build && npm run db:push` |
-| **Start Command** | `npm run start` |
+| **Start Command** | `npm run start`                    |
 
 **What these do:**
 
@@ -110,16 +112,16 @@ Or create a `.node-version` file in the project root:
 
 ## Troubleshooting
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| `SESSION_SECRET must be set` | Missing env var | Add `SESSION_SECRET` in Railway Variables |
-| `DATABASE_URL must be set` | PostgreSQL not linked | Link `DATABASE_URL` reference variable from the PostgreSQL service |
-| Session/auth errors after deploy | `sessions` table does not exist | Run `npm run db:push` (included in the build command above) |
-| `bcrypt` build failure | Native compilation issue | Ensure you are using Railway's default Nixpacks builder, not a custom Dockerfile |
+| Symptom                                   | Cause                              | Fix                                                                                                                    |
+| ----------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `SESSION_SECRET must be set`              | Missing env var                    | Add `SESSION_SECRET` in Railway Variables                                                                              |
+| `DATABASE_URL must be set`                | PostgreSQL not linked              | Link `DATABASE_URL` reference variable from the PostgreSQL service                                                     |
+| Session/auth errors after deploy          | `sessions` table does not exist    | Run `npm run db:push` (included in the build command above)                                                            |
+| `bcrypt` build failure                    | Native compilation issue           | Ensure you are using Railway's default Nixpacks builder, not a custom Dockerfile                                       |
 | Cookies not persisting / auth not working | `NODE_ENV` not set to `production` | Set `NODE_ENV=production` — this enables `secure: true` on session cookies, which requires HTTPS (provided by Railway) |
-| App starts but page is blank | Static files not found | Confirm `npm run build` completed successfully in the deploy logs |
-| S3 upload errors | Object Storage not linked | Link Railway Object Storage or add S3-compatible credentials manually |
-| AI features not working | API keys not set | Add `OPENAI_API_KEY` or `GOOGLE_GEMINI_API_KEY` — at least one is needed for nutrition AI features |
+| App starts but page is blank              | Static files not found             | Confirm `npm run build` completed successfully in the deploy logs                                                      |
+| S3 upload errors                          | Object Storage not linked          | Link Railway Object Storage or add S3-compatible credentials manually                                                  |
+| AI features not working                   | API keys not set                   | Add `OPENAI_API_KEY` or `GOOGLE_GEMINI_API_KEY` — at least one is needed for nutrition AI features                     |
 
 ## Architecture on Railway
 

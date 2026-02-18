@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import session from "express-session";
 import bcrypt from "bcrypt";
 import connectPgSimple from "connect-pg-simple";
@@ -33,7 +34,7 @@ export async function hashPassword(password: string): Promise<string> {
 
 export async function verifyPassword(
   password: string,
-  hash: string
+  hash: string,
 ): Promise<boolean> {
   return bcrypt.compare(password, hash);
 }
@@ -53,6 +54,13 @@ passport.use(
           return done(null, false, { message: "Invalid email or password" });
         }
 
+        if (!user.password) {
+          return done(null, false, {
+            message:
+              "This account uses Google sign-in. Please sign in with Google.",
+          });
+        }
+
         const isValid = await verifyPassword(password, user.password);
         if (!isValid) {
           return done(null, false, { message: "Invalid email or password" });
@@ -64,9 +72,74 @@ passport.use(
       } catch (err) {
         return done(err);
       }
-    }
-  )
+    },
+  ),
 );
+
+// Configure Passport Google Strategy
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(
+    new GoogleStrategy(
+      {
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: "/api/auth/google/callback",
+      },
+      async (_accessToken, _refreshToken, profile, done) => {
+        try {
+          const email = profile.emails?.[0]?.value?.toLowerCase();
+          if (!email) {
+            return done(new Error("No email returned from Google"));
+          }
+
+          // Look up by googleId first
+          const [byGoogleId] = await db
+            .select()
+            .from(users)
+            .where(eq(users.googleId, profile.id));
+
+          if (byGoogleId) {
+            const { password: _, ...userWithoutPassword } = byGoogleId;
+            return done(null, userWithoutPassword as Express.User);
+          }
+
+          // Link to existing account by email
+          const [byEmail] = await db
+            .select()
+            .from(users)
+            .where(eq(users.email, email));
+
+          if (byEmail) {
+            const [updated] = await db
+              .update(users)
+              .set({ googleId: profile.id })
+              .where(eq(users.id, byEmail.id))
+              .returning();
+            const { password: _, ...userWithoutPassword } = updated;
+            return done(null, userWithoutPassword as Express.User);
+          }
+
+          // Create new user
+          const [newUser] = await db
+            .insert(users)
+            .values({
+              email,
+              googleId: profile.id,
+              firstName: profile.name?.givenName || null,
+              lastName: profile.name?.familyName || null,
+              profileImageUrl: profile.photos?.[0]?.value || null,
+            })
+            .returning();
+
+          const { password: _, ...userWithoutPassword } = newUser;
+          return done(null, userWithoutPassword as Express.User);
+        } catch (err) {
+          return done(err as Error);
+        }
+      },
+    ),
+  );
+}
 
 // Session serialization
 passport.serializeUser((user, done) => {
@@ -126,7 +199,7 @@ export async function setupAuth(app: Express): Promise<void> {
         sameSite: "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       },
-    })
+    }),
   );
 
   // Initialize Passport
@@ -138,7 +211,7 @@ export async function setupAuth(app: Express): Promise<void> {
 export function isAuthenticated(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void {
   if (req.isAuthenticated()) {
     return next();
@@ -205,7 +278,7 @@ export function registerAuthRoutes(app: Express): void {
       (
         err: Error | null,
         user: Express.User | false,
-        info: { message: string }
+        info: { message: string },
       ) => {
         if (err) {
           return next(err);
@@ -221,7 +294,7 @@ export function registerAuthRoutes(app: Express): void {
           }
           res.json(user);
         });
-      }
+      },
     )(req, res, next);
   });
 
@@ -246,4 +319,19 @@ export function registerAuthRoutes(app: Express): void {
   app.get("/api/auth/user", isAuthenticated, (req: Request, res: Response) => {
     res.json(req.user);
   });
+
+  // Google OAuth — initiate
+  app.get(
+    "/api/auth/google",
+    passport.authenticate("google", { scope: ["profile", "email"] }),
+  );
+
+  // Google OAuth — callback
+  app.get(
+    "/api/auth/google/callback",
+    passport.authenticate("google", { failureRedirect: "/login?error=google" }),
+    (_req: Request, res: Response) => {
+      res.redirect("/");
+    },
+  );
 }
