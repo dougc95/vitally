@@ -323,13 +323,31 @@ export function registerAuthRoutes(app: Express): void {
   // Google OAuth — initiate
   app.get(
     "/api/auth/google",
-    passport.authenticate("google", { scope: ["profile", "email"] }),
+    (req: Request, res: Response, next: NextFunction) => {
+      if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+        return res
+          .status(501)
+          .json({ message: "Google OAuth is not configured on this server" });
+      }
+      passport.authenticate("google", { scope: ["profile", "email"] })(
+        req,
+        res,
+        next,
+      );
+    },
   );
 
   // Google OAuth — callback
   app.get(
     "/api/auth/google/callback",
-    passport.authenticate("google", { failureRedirect: "/login?error=google" }),
+    (req: Request, res: Response, next: NextFunction) => {
+      if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+        return res.redirect("/login?error=google");
+      }
+      passport.authenticate("google", {
+        failureRedirect: "/login?error=google",
+      })(req, res, next);
+    },
     (_req: Request, res: Response) => {
       res.redirect("/");
     },
