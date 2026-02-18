@@ -1,0 +1,386 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<roadmap id="vitally-social-habit-feed" version="2.0" source="docs/prd-social-habit-activity-feed.md">
+  <metadata>
+    <project>Vitally</project>
+    <feature>Friends Habit Activity Feed (Private-by-Default)</feature>
+    <status>planned</status>
+  </metadata>
+
+  <overview>
+    <problem>
+      Users can track habits but cannot follow friends for accountability. The platform needs friend-only habit activity sharing while preserving strict privacy for all other health domains.
+    </problem>
+    <goal>
+      Deliver a secure social layer that supports friend relationships, a friends-only habit activity feed, and explicit privacy controls without leaking non-habit data.
+    </goal>
+  </overview>
+
+  <scope>
+    <inScope>
+      <item>Friend request lifecycle: send, accept, decline, remove, block.</item>
+      <item>Habit activity event generation and friend feed rendering.</item>
+      <item>Per-user social privacy settings for habit activity sharing.</item>
+      <item>API, storage, schema, and frontend support for social features.</item>
+    </inScope>
+    <outOfScope>
+      <item>Public profiles or discoverability by non-friends.</item>
+      <item>Sharing measurements, goals, nutrition, calculations, recipes, or imports/exports.</item>
+      <item>Comments, reactions, chat, and real-time push in v1.</item>
+    </outOfScope>
+  </scope>
+
+  <requirements>
+    <functional id="FR-1">Friendship lifecycle management with anti-abuse and self/duplicate request protections.</functional>
+    <functional id="FR-2">Habit activity event capture on completion changes with minimal feed payload.</functional>
+    <functional id="FR-3">Friends-only reverse-chronological feed with cursor pagination (default 25, max 100).</functional>
+    <functional id="FR-4">Privacy controls: shareHabitActivity and showHabitName.</functional>
+    <functional id="FR-5">Access boundaries that prevent cross-user exposure of non-habit domains.</functional>
+    <functional id="FR-6">Friends page UX with Feed, Friends, Requests, and Privacy tabs.</functional>
+  </requirements>
+
+  <dataModel>
+    <table name="friendships">
+      <column name="id" type="serial" />
+      <column name="requesterPatientId" type="int" />
+      <column name="addresseePatientId" type="int" />
+      <column name="status" type="pending|accepted|declined|blocked" />
+      <column name="createdAt" type="timestamp" />
+      <column name="respondedAt" type="timestamp" nullable="true" />
+      <constraint>Unique requester/addressee pair.</constraint>
+      <constraint>requesterPatientId != addresseePatientId.</constraint>
+    </table>
+
+    <table name="habit_activity_events">
+      <column name="id" type="serial" />
+      <column name="actorPatientId" type="int" />
+      <column name="habitId" type="int" />
+      <column name="habitEntryId" type="int" nullable="true" />
+      <column name="eventType" type="habit_completed|habit_uncompleted|habit_created" />
+      <column name="eventDate" type="date" nullable="true" />
+      <column name="createdAt" type="timestamp" />
+    </table>
+
+    <table name="social_privacy_settings">
+      <column name="patientId" type="int" primaryKey="true" />
+      <column name="shareHabitActivity" type="boolean" default="true" />
+      <column name="showHabitName" type="boolean" default="true" />
+      <column name="updatedAt" type="timestamp" />
+    </table>
+  </dataModel>
+
+  <api>
+    <endpoint method="POST" path="/api/social/friends/requests" />
+    <endpoint method="GET" path="/api/social/friends/requests" />
+    <endpoint method="POST" path="/api/social/friends/requests/:id/accept" />
+    <endpoint method="POST" path="/api/social/friends/requests/:id/decline" />
+    <endpoint method="POST" path="/api/social/friends/requests/:id/block" />
+    <endpoint method="GET" path="/api/social/friends" />
+    <endpoint method="DELETE" path="/api/social/friends/:friendPatientId" />
+    <endpoint method="GET" path="/api/social/feed" />
+    <endpoint method="GET" path="/api/social/privacy" />
+    <endpoint method="PUT" path="/api/social/privacy" />
+  </api>
+
+  <!-- ================================================================== -->
+  <!--  IMPLEMENTATION — atomic sub-feature phases                        -->
+  <!-- ================================================================== -->
+  <implementation>
+
+    <!-- ─────────────────────────────────────────────────────────────────
+         P1 · SOCIAL DATA LAYER
+         Pure schema & migration work — no application logic yet.
+         ───────────────────────────────────────────────────────────────── -->
+    <phase id="P1" name="Social Data Layer" priority="P0">
+      <objective>Create the database tables, relations, indexes, and Drizzle migration for the entire social feature set.</objective>
+
+      <task id="P1-T1" area="database">
+        Define the `friendships` table in shared/schema.ts with columns (id, requesterPatientId, addresseePatientId, status enum, createdAt, respondedAt), unique pair constraint, and self-request check constraint.
+      </task>
+      <task id="P1-T2" area="database">
+        Define the `habit_activity_events` table in shared/schema.ts with columns (id, actorPatientId, habitId, habitEntryId nullable, eventType enum, eventDate nullable, createdAt).
+      </task>
+      <task id="P1-T3" area="database">
+        Define the `social_privacy_settings` table in shared/schema.ts with columns (patientId PK/FK, shareHabitActivity boolean default true, showHabitName boolean default true, updatedAt).
+      </task>
+      <task id="P1-T4" area="database">
+        Add Drizzle `relations()` declarations linking social tables to `patients` and `habits`/`habit_entries`.
+      </task>
+      <task id="P1-T5" area="database">
+        Add performance indexes: friendships (requester+status, addressee+status), habit_activity_events (createdAt desc, actorPatientId+createdAt desc).
+      </task>
+      <task id="P1-T6" area="database">
+        Export insert schemas (Zod) and select types for all three new tables.
+      </task>
+      <task id="P1-T7" area="database">
+        Generate and review the Drizzle migration file; verify it applies cleanly to a fresh local DB.
+      </task>
+
+      <deliverable>Three new social tables with relations, indexes, Zod schemas, and a verified migration.</deliverable>
+    </phase>
+
+    <!-- ─────────────────────────────────────────────────────────────────
+         P2 · FRIENDSHIP LIFECYCLE (BACKEND)
+         Contracts, storage, and API routes for friend request workflows.
+         ───────────────────────────────────────────────────────────────── -->
+    <phase id="P2" name="Friendship Lifecycle Backend" priority="P0" dependsOn="P1">
+      <objective>Ship the API that lets users send, accept, decline, remove, and block friends with full authorization enforcement.</objective>
+
+      <task id="P2-T1" area="contract">
+        Add route contracts in shared/routes.ts for POST /api/social/friends/requests (send), GET /api/social/friends/requests (list incoming+outgoing), POST …/:id/accept, POST …/:id/decline, POST …/:id/block.
+      </task>
+      <task id="P2-T2" area="contract">
+        Add route contracts in shared/routes.ts for GET /api/social/friends (list accepted) and DELETE /api/social/friends/:friendPatientId (remove friend).
+      </task>
+      <task id="P2-T3" area="backend">
+        Extend IStorage interface with friendship methods: createFriendRequest, getFriendRequests, acceptFriendRequest, declineFriendRequest, blockFriendRequest, listFriends, removeFriend.
+      </task>
+      <task id="P2-T4" area="backend">
+        Implement friendship storage methods in DatabaseStorage, including: duplicate/self-request rejection, status transition validation (pending→accepted/declined/blocked), bidirectional lookup for removals, and block enforcement.
+      </task>
+      <task id="P2-T5" area="backend">
+        Register friendship API routes in server/routes.ts under isAuthenticated; wire request parsing with Zod schemas and call storage methods.
+      </task>
+      <task id="P2-T6" area="testing">
+        Write friendship-specific tests: send/accept/decline/remove happy paths, self-request rejection, duplicate request rejection, block prevents future requests, unauthorized access returns 403.
+      </task>
+
+      <deliverable>Complete friendship API with storage logic and test coverage for all state transitions.</deliverable>
+    </phase>
+
+    <!-- ─────────────────────────────────────────────────────────────────
+         P3 · HABIT ACTIVITY EVENT CAPTURE
+         Backend logic to generate feed events on habit completion changes.
+         ───────────────────────────────────────────────────────────────── -->
+    <phase id="P3" name="Habit Activity Event Capture" priority="P0" dependsOn="P1">
+      <objective>Automatically record habit_activity_events when users toggle habit completions, providing the raw data the feed consumes.</objective>
+
+      <task id="P3-T1" area="backend">
+        Add IStorage method: createHabitActivityEvent(actorPatientId, habitId, habitEntryId, eventType, eventDate).
+      </task>
+      <task id="P3-T2" area="backend">
+        Implement createHabitActivityEvent in DatabaseStorage with a simple insert into habit_activity_events.
+      </task>
+      <task id="P3-T3" area="backend">
+        Hook event creation into the existing toggleHabitEntry flow: emit `habit_completed` when marking complete, `habit_uncompleted` when unmarking.
+      </task>
+      <task id="P3-T4" area="backend">
+        (Optional) Emit `habit_created` event when a new habit is created (default off; guard behind a feature flag or config constant).
+      </task>
+      <task id="P3-T5" area="testing">
+        Write tests: toggling a habit creates the correct event record; event fields match habit/entry data; no event is created for no-op toggles.
+      </task>
+
+      <deliverable>Habit activity events are reliably written on every completion state change, ready for feed consumption.</deliverable>
+    </phase>
+
+    <!-- ─────────────────────────────────────────────────────────────────
+         P4 · SOCIAL PRIVACY SETTINGS (BACKEND)
+         CRUD for per-user privacy toggles that control feed visibility.
+         ───────────────────────────────────────────────────────────────── -->
+    <phase id="P4" name="Social Privacy Settings Backend" priority="P0" dependsOn="P1">
+      <objective>Let users manage shareHabitActivity and showHabitName preferences via API, with defaults auto-provisioned on first read.</objective>
+
+      <task id="P4-T1" area="contract">
+        Add route contracts in shared/routes.ts for GET /api/social/privacy (read) and PUT /api/social/privacy (update).
+      </task>
+      <task id="P4-T2" area="backend">
+        Extend IStorage with getSocialPrivacySettings(patientId) and updateSocialPrivacySettings(patientId, data).
+      </task>
+      <task id="P4-T3" area="backend">
+        Implement storage methods in DatabaseStorage: get returns existing row or inserts+returns defaults; update performs upsert and sets updatedAt.
+      </task>
+      <task id="P4-T4" area="backend">
+        Register privacy API routes in server/routes.ts under isAuthenticated.
+      </task>
+      <task id="P4-T5" area="testing">
+        Write tests: default settings are returned for new user; update persists; partial update only changes specified fields; unauthorized access returns 403.
+      </task>
+
+      <deliverable>Privacy settings API with auto-provisioning and full test coverage.</deliverable>
+    </phase>
+
+    <!-- ─────────────────────────────────────────────────────────────────
+         P5 · FRIENDS FEED ENDPOINT
+         The read-path that aggregates friend events, applies privacy
+         filters, and returns a paginated feed.
+         ───────────────────────────────────────────────────────────────── -->
+    <phase id="P5" name="Friends Feed Endpoint" priority="P0" dependsOn="P2,P3,P4">
+      <objective>Expose a paginated, privacy-aware feed of accepted-friend habit activity events.</objective>
+
+      <task id="P5-T1" area="contract">
+        Add route contract in shared/routes.ts for GET /api/social/feed with cursor and limit query params; define FeedItem response shape.
+      </task>
+      <task id="P5-T2" area="backend">
+        Add IStorage method: getFriendFeed(viewerPatientId, cursor, limit) returning { items: FeedItem[], nextCursor }.
+      </task>
+      <task id="P5-T3" area="backend">
+        Implement getFriendFeed in DatabaseStorage:
+        - Join habit_activity_events with friendships (status=accepted) to scope to friends only.
+        - Join social_privacy_settings to exclude actors with shareHabitActivity=false.
+        - Conditionally omit habit title when actor's showHabitName=false.
+        - Include minimal actor profile data (displayName, avatar).
+        - Apply cursor-based pagination ordered by createdAt desc; default 25, max 100.
+      </task>
+      <task id="P5-T4" area="backend">
+        Add helper verifyFriendAccess(actorPatientId, viewerPatientId) to validate that viewer is an accepted friend and neither party is blocked; reuse in feed safety.
+      </task>
+      <task id="P5-T5" area="backend">
+        Register the feed API route in server/routes.ts under isAuthenticated.
+      </task>
+      <task id="P5-T6" area="testing">
+        Write feed-specific tests:
+        - Feed returns only accepted-friend events.
+        - Blocked users return zero items in both directions.
+        - shareHabitActivity=false hides events.
+        - showHabitName=false omits habit title.
+        - Cursor pagination returns correct pages.
+        - No non-habit data appears in response.
+      </task>
+      <task id="P5-T7" area="testing">
+        Performance baseline: measure p95 latency for 25-item feed with 100 friends against seeded data; document results.
+      </task>
+
+      <deliverable>Secure, paginated friends feed endpoint passing all privacy and access-control tests.</deliverable>
+    </phase>
+
+    <!-- ─────────────────────────────────────────────────────────────────
+         P6 · FRONTEND — FRIENDS PAGE & HOOKS
+         Core UI: React Query hooks, page layout, tabs, and routing.
+         ───────────────────────────────────────────────────────────────── -->
+    <phase id="P6" name="Frontend Friends Page and Hooks" priority="P1" dependsOn="P5">
+      <objective>Build the Friends page with tab navigation and wire it to the social API via React Query hooks.</objective>
+
+      <task id="P6-T1" area="frontend">
+        Create client/src/hooks/use-social.ts with React Query hooks: useFriendFeed, useFriendsList, useFriendRequests, usePrivacySettings (query + mutation for each writable resource).
+      </task>
+      <task id="P6-T2" area="frontend">
+        Create client/src/pages/Friends.tsx with tab-based layout containing four tabs: Feed, Friends, Requests, Privacy.
+      </task>
+      <task id="P6-T3" area="frontend">
+        Add /friends route in client/src/App.tsx as a protected route (must be authenticated).
+      </task>
+      <task id="P6-T4" area="frontend">
+        Add "Friends" nav entry in Sidebar.tsx with an appropriate icon.
+      </task>
+
+      <deliverable>Navigable Friends page shell with working routing and data-fetching hooks.</deliverable>
+    </phase>
+
+    <!-- ─────────────────────────────────────────────────────────────────
+         P7 · FRONTEND — SOCIAL COMPONENTS
+         Individual UI components for feed items, request cards, friend
+         list, privacy form, and all empty/loading/error states.
+         ───────────────────────────────────────────────────────────────── -->
+    <phase id="P7" name="Frontend Social Components" priority="P1" dependsOn="P6">
+      <objective>Build all social UI components and compose them into the Friends page tabs with proper state handling.</objective>
+
+      <task id="P7-T1" area="frontend">
+        Create client/src/components/social/FeedItem.tsx — renders a single activity event (actor avatar/name, event text, habit title when permitted, relative timestamp).
+      </task>
+      <task id="P7-T2" area="frontend">
+        Create client/src/components/social/FeedList.tsx — renders the scrollable, paginated feed using useFriendFeed; handles infinite scroll or "Load more" with cursor.
+      </task>
+      <task id="P7-T3" area="frontend">
+        Create client/src/components/social/FriendRequestCard.tsx — shows incoming/outgoing request with accept/decline/cancel actions.
+      </task>
+      <task id="P7-T4" area="frontend">
+        Create client/src/components/social/SendRequestForm.tsx — email input to send a new friend request with validation and feedback.
+      </task>
+      <task id="P7-T5" area="frontend">
+        Create client/src/components/social/FriendCard.tsx — renders an accepted friend with remove/block actions.
+      </task>
+      <task id="P7-T6" area="frontend">
+        Create client/src/components/social/PrivacyForm.tsx — toggle switches for shareHabitActivity and showHabitName bound to usePrivacySettings mutation.
+      </task>
+      <task id="P7-T7" area="frontend">
+        Implement empty states for each tab: "No friends yet" (Friends), "No activity yet" (Feed), "No pending requests" (Requests), "Sharing disabled" hint (Privacy when off).
+      </task>
+      <task id="P7-T8" area="frontend">
+        Implement loading skeletons and error states for each tab using existing app patterns.
+      </task>
+      <task id="P7-T9" area="frontend">
+        Wire all components into Friends.tsx tabs and verify end-to-end flow with backend.
+      </task>
+
+      <deliverable>Fully functional social UI with feed, friend management, request handling, and privacy controls.</deliverable>
+    </phase>
+
+    <!-- ─────────────────────────────────────────────────────────────────
+         P8 · POLISH, GUARDRAILS & HARDENING
+         UX refinement, rate limiting, and operational readiness.
+         ───────────────────────────────────────────────────────────────── -->
+    <phase id="P8" name="Polish, Guardrails, and Hardening" priority="P2" dependsOn="P7">
+      <objective>Refine UX copy, add anti-abuse safeguards, and prepare for broad rollout.</objective>
+
+      <task id="P8-T1" area="product">
+        Refine feed event copy: human-friendly text for each eventType (e.g., "Alice completed Morning Run", "Bob completed a habit").
+      </task>
+      <task id="P8-T2" area="frontend">
+        Add micro-animations: feed item entrance, toggle transitions for privacy switches, request card accept/decline feedback.
+      </task>
+      <task id="P8-T3" area="backend">
+        Add rate limiting on friend request endpoints (e.g., max 20 requests/hour per user).
+      </task>
+      <task id="P8-T4" area="backend">
+        Evaluate and optionally implement a retention/archival policy for old habit_activity_events (e.g., soft-delete events older than 90 days).
+      </task>
+      <task id="P8-T5" area="frontend">
+        Assess and optionally add a notification badge on the Friends nav item for pending incoming requests.
+      </task>
+      <task id="P8-T6" area="testing">
+        End-to-end integration test: create two users, send request, accept, toggle habit, verify feed shows event, toggle privacy off, verify event hidden, block, verify zero visibility.
+      </task>
+      <task id="P8-T7" area="testing">
+        Security audit checklist: verify no social endpoint leaks measurements/goals/nutrition; verify blocked users have zero bidirectional visibility; verify all endpoints require auth.
+      </task>
+
+      <deliverable>Hardened, polished social feature ready for broad rollout with anti-abuse safeguards and full E2E validation.</deliverable>
+    </phase>
+
+  </implementation>
+
+  <security>
+    <rule>All social endpoints require authenticated sessions.</rule>
+    <rule>Feed query must return only accepted-friend events and must respect block relationships.</rule>
+    <rule>Privacy settings are enforced at read-time to allow immediate visibility revocation.</rule>
+    <rule>No social response may include measurements, goals, nutrition, calculations, or recipe entities.</rule>
+  </security>
+
+  <acceptanceCriteria>
+    <criterion type="functional">Users can complete friend request to accepted friend feed flow.</criterion>
+    <criterion type="functional">Feed shows accepted friends only and paginates correctly.</criterion>
+    <criterion type="privacy">Turning off shareHabitActivity hides past and future events.</criterion>
+    <criterion type="security">Blocked users have zero bidirectional feed visibility.</criterion>
+    <criterion type="performance">Feed p95 latency for 25 items and 100 friends is &lt; 300ms.</criterion>
+  </acceptanceCriteria>
+
+  <metrics>
+    <metric id="M1">Percent of active users with at least one friend.</metric>
+    <metric id="M2">Weekly feed viewers / DAU.</metric>
+    <metric id="M3">Average friend requests sent and accepted.</metric>
+    <metric id="M4">Privacy toggle usage rate.</metric>
+    <metric id="M5">Confirmed cross-user data leaks (target: zero).</metric>
+  </metrics>
+
+  <risks>
+    <risk id="R1" severity="high">
+      <description>Privacy regression due to social joins.</description>
+      <mitigation>Centralize friendship and privacy filters in storage and enforce with test matrix.</mitigation>
+    </risk>
+    <risk id="R2" severity="medium">
+      <description>Feed bloat and query degradation over time.</description>
+      <mitigation>Use cursor pagination and evaluate retention/archive strategy.</mitigation>
+    </risk>
+    <risk id="R3" severity="medium">
+      <description>Friend request spam or abuse.</description>
+      <mitigation>Rate limiting, block support, and duplicate/self-request prevention.</mitigation>
+    </risk>
+  </risks>
+
+  <openQuestions>
+    <question id="Q1">Should uncomplete actions appear in feed, or only completions?</question>
+    <question id="Q2">Should old feed events remain visible after unfriending, or be hidden immediately?</question>
+    <question id="Q3">Should habit titles be hidden by default for stricter privacy?</question>
+    <question id="Q4">Should pending friend requests surface as a navigation badge in v1?</question>
+  </openQuestions>
+</roadmap>
