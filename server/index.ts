@@ -6,6 +6,9 @@ import { createServer } from "http";
 const app = express();
 const httpServer = createServer(app);
 
+// Trust reverse proxy (Railway, nginx) so secure cookies and req.ip work correctly
+app.set("trust proxy", 1);
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
@@ -17,7 +20,7 @@ app.use(
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
-  })
+  }),
 );
 
 app.use(express.urlencoded({ extended: false }));
@@ -95,6 +98,6 @@ import { initBucket } from "./s3";
     },
     () => {
       log(`serving on port ${port}`);
-    }
+    },
   );
 })();
